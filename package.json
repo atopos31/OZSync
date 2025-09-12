@@ -1,7 +1,7 @@
 {
-	"name": "obsidian-zimaos-sync",
+	"name": "obsidian-ozsync",
 	"version": "1.0.0",
-	"description": "Sync your Obsidian vault with ZimaOS cloud storage, create backups, and manage files remotely.",
+	"description": "Sync your Obsidian vault with OZSync cloud storage, create backups, and manage files remotely.",
 	"main": "main.js",
 	"scripts": {
 		"dev": "node esbuild.config.mjs",
@@ -12,13 +12,13 @@
 	"keywords": [
 		"obsidian",
 		"plugin",
-		"zimaos",
+		"ozsync",
 		"sync",
 		"backup",
 		"cloud",
 		"storage"
 	],
-	"author": "ZimaOS Sync Plugin Team",
+	"author": "OZSync Plugin Team",
 	"license": "MIT",
 	"devDependencies": {
 		"@types/crypto-js": "^4.2.2",

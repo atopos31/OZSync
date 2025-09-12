@@ -1,18 +1,18 @@
 import { ItemView, WorkspaceLeaf, Notice, TFile, TFolder, Modal, Setting } from 'obsidian';
-import ZimaOSSyncPlugin from '../../main';
-import { ZimaOSFile } from '../types';
+import OZSyncPlugin from '../../main';
+import { OZSyncFile } from '../types';
 import { format } from 'date-fns';
 
-export const CLOUD_BROWSER_VIEW_TYPE = 'zimaos-cloud-browser';
+export const CLOUD_BROWSER_VIEW_TYPE = 'ozsync-cloud-browser';
 
 export class CloudBrowserView extends ItemView {
-	plugin: ZimaOSSyncPlugin;
+	plugin: OZSyncPlugin;
 	private currentPath: string = '/';
-	private files: ZimaOSFile[] = [];
+	private files: OZSyncFile[] = [];
 	private selectedFiles: Set<string> = new Set();
 	private loading: boolean = false;
 
-	constructor(leaf: WorkspaceLeaf, plugin: ZimaOSSyncPlugin) {
+	constructor(leaf: WorkspaceLeaf, plugin: OZSyncPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
@@ -22,7 +22,7 @@ export class CloudBrowserView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'ZimaOS Cloud Browser';
+		return 'OZSync Cloud Browser';
 	}
 
 	getIcon(): string {
@@ -37,8 +37,8 @@ export class CloudBrowserView extends ItemView {
 	private async loadFiles(): Promise<void> {
 		this.loading = true;
 		try {
-			const directories = await this.plugin.zimaosClient.listDirectories(this.currentPath);
-			// Convert ZimaOSDirectory to ZimaOSFile format
+			const directories = await this.plugin.ozsyncClient.listDirectories(this.currentPath);
+			// Convert OZSyncDirectory to OZSyncFile format
 			this.files = directories.map(dir => ({
 				name: dir.name,
 				path: dir.path,
@@ -50,7 +50,7 @@ export class CloudBrowserView extends ItemView {
 			}));
 		} catch (error) {
 			console.error('Failed to load files:', error);
-			new Notice('Failed to load files from ZimaOS');
+			new Notice('Failed to load files from OZSync');
 			this.files = [];
 		}
 		this.loading = false;
@@ -59,7 +59,7 @@ export class CloudBrowserView extends ItemView {
 	private renderView(): void {
 		const container = this.containerEl.children[1];
 		container.empty();
-		container.addClass('zimaos-cloud-browser');
+		container.addClass('ozsync-cloud-browser');
 
 		// Header
 		this.renderHeader(container as HTMLElement);
@@ -79,7 +79,7 @@ export class CloudBrowserView extends ItemView {
 
 	private renderHeader(container: HTMLElement): void {
 		const header = container.createEl('div', { cls: 'browser-header' });
-		header.createEl('h2', { text: 'ZimaOS Cloud Browser' });
+		header.createEl('h2', { text: 'OZSync Cloud Browser' });
 		
 		const refreshBtn = header.createEl('button', { 
 			text: '🔄 Refresh',
@@ -337,9 +337,9 @@ export class CloudBrowserView extends ItemView {
 		new Notice(`Downloaded ${selectedFileObjects.length} file(s)`);
 	}
 
-	private async downloadFile(file: ZimaOSFile): Promise<void> {
+	private async downloadFile(file: OZSyncFile): Promise<void> {
 		try {
-			const content = await this.plugin.zimaosClient.downloadFile(file.path);
+				const content = await this.plugin.ozsyncClient.downloadFile(file.path);
 			
 			// Create file in vault
 			const fileName = file.name;
@@ -383,7 +383,7 @@ export class CloudBrowserView extends ItemView {
 		new Notice(`Deleted ${selectedFileObjects.length} item(s)`);
 	}
 
-	private async deleteFile(file: ZimaOSFile, confirm: boolean = true): Promise<void> {
+	private async deleteFile(file: OZSyncFile, confirm: boolean = true): Promise<void> {
 		if (confirm) {
 			const confirmed = await this.showConfirmDialog(
 				`Are you sure you want to delete "${file.name}"?`
@@ -392,7 +392,7 @@ export class CloudBrowserView extends ItemView {
 		}
 		
 		try {
-			await this.plugin.zimaosClient.deleteFile(file.path);
+				await this.plugin.ozsyncClient.deleteFile(file.path);
 			
 			if (confirm) {
 				await this.loadFiles();
@@ -417,9 +417,9 @@ export class CloudBrowserView extends ItemView {
 		}).open();
 	}
 
-	private async previewFile(file: ZimaOSFile): Promise<void> {
+	private async previewFile(file: OZSyncFile): Promise<void> {
 		try {
-			const content = await this.plugin.zimaosClient.downloadFile(file.path);
+				const content = await this.plugin.ozsyncClient.downloadFile(file.path);
 			if (content !== null) {
 				const buffer = new TextEncoder().encode(content).buffer;
 				new PreviewModal(this.app, file, buffer).open();
@@ -472,11 +472,11 @@ export class CloudBrowserView extends ItemView {
 
 // Upload Modal
 class UploadModal extends Modal {
-	plugin: ZimaOSSyncPlugin;
+	plugin: OZSyncPlugin;
 	currentPath: string;
 	onSuccess: () => void;
 
-	constructor(app: any, plugin: ZimaOSSyncPlugin, currentPath: string, onSuccess: () => void) {
+	constructor(app: any, plugin: OZSyncPlugin, currentPath: string, onSuccess: () => void) {
 		super(app);
 		this.plugin = plugin;
 		this.currentPath = currentPath;
@@ -533,7 +533,7 @@ class UploadModal extends Modal {
 						targetPath,
 						contentSize: content.byteLength
 					});
-					await this.plugin.zimaosClient.uploadFileV2(targetPath, file.name, Buffer.from(content));
+					await this.plugin.ozsyncClient.uploadFileV2(targetPath, file.name, Buffer.from(content));
 				}
 				new Notice(`Uploaded ${fileInput.files.length} file(s)`);
 			}
@@ -550,7 +550,7 @@ class UploadModal extends Modal {
 						targetPath,
 						contentSize: content.byteLength
 					});
-					await this.plugin.zimaosClient.uploadFileV2(targetPath, vaultFile.name, Buffer.from(content));
+					await this.plugin.ozsyncClient.uploadFileV2(targetPath, vaultFile.name, Buffer.from(content));
 					new Notice(`Uploaded: ${vaultFile.name}`);
 				}
 			}
@@ -566,11 +566,11 @@ class UploadModal extends Modal {
 
 // Create Folder Modal
 class CreateFolderModal extends Modal {
-	plugin: ZimaOSSyncPlugin;
+	plugin: OZSyncPlugin;
 	currentPath: string;
 	onSuccess: () => void;
 
-	constructor(app: any, plugin: ZimaOSSyncPlugin, currentPath: string, onSuccess: () => void) {
+	constructor(app: any, plugin: OZSyncPlugin, currentPath: string, onSuccess: () => void) {
 		super(app);
 		this.plugin = plugin;
 		this.currentPath = currentPath;
@@ -617,8 +617,8 @@ class CreateFolderModal extends Modal {
 		}
 		
 		try {
-			const folderPath = `${this.currentPath}/${folderName.trim()}`.replace('//', '/');
-			await this.plugin.zimaosClient.createDirectory(folderPath);
+				const folderPath = `${this.currentPath}/${folderName.trim()}`.replace('//', '/');
+				await this.plugin.ozsyncClient.createDirectory(folderPath);
 			new Notice(`Created folder: ${folderName}`);
 			this.onSuccess();
 			this.close();
@@ -631,10 +631,10 @@ class CreateFolderModal extends Modal {
 
 // Preview Modal
 class PreviewModal extends Modal {
-	file: ZimaOSFile;
+	file: OZSyncFile;
 	content: ArrayBuffer;
 
-	constructor(app: any, file: ZimaOSFile, content: ArrayBuffer) {
+	constructor(app: any, file: OZSyncFile, content: ArrayBuffer) {
 		super(app);
 		this.file = file;
 		this.content = content;

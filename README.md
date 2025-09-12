@@ -1,16 +1,19 @@
-# Obsidian Sample Plugin
+# OZSync for Obsidian
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+Sync your Obsidian notes with OZSync for backup, cloud access, and cross-device synchronization.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+This plugin provides seamless integration between Obsidian and OZSync, allowing you to:
+- Automatically sync your notes to OZSync cloud storage
+- Access your notes from multiple devices
+- Keep your notes backed up and secure
+- Browse and manage your cloud files directly from Obsidian
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open Sample Modal" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+Key features:
+- Real-time synchronization with OZSync
+- Configurable sync intervals and directories
+- Cloud file browser with upload/download capabilities
+- Automatic conflict resolution
+- Secure authentication with OZSync servers
 
 ## First time developing plugins?
 

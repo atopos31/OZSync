@@ -1,15 +1,15 @@
 import { App, Modal, Setting, Notice } from 'obsidian';
-import ZimaOSSyncPlugin from '../../main';
-import { ZimaOSDirectory } from '../types';
+import OZSyncPlugin from '../../main';
+import { OZSyncDirectory } from '../types';
 
 export class DirectoryBrowserModal extends Modal {
-	plugin: ZimaOSSyncPlugin;
+	plugin: OZSyncPlugin;
 	onSelect: (path: string) => void;
 	currentPath: string = '/media';
-	directories: ZimaOSDirectory[] = [];
+	directories: OZSyncDirectory[] = [];
 	contentEl: HTMLElement;
 
-	constructor(app: App, plugin: ZimaOSSyncPlugin, onSelect: (path: string) => void) {
+	constructor(app: App, plugin: OZSyncPlugin, onSelect: (path: string) => void) {
 		super(app);
 		this.plugin = plugin;
 		this.onSelect = onSelect;
@@ -58,7 +58,7 @@ export class DirectoryBrowserModal extends Modal {
 		container.createEl('div', { text: 'Loading directories...', cls: 'loading-text' });
 
 		try {
-			this.directories = await this.plugin.zimaosClient.listDirectories(this.currentPath);
+			this.directories = await this.plugin.ozsyncClient.listDirectories(this.currentPath);
 			this.renderDirectories(container);
 		} catch (error) {
 			console.error('Failed to load directories:', error);

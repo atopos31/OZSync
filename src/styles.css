@@ -248,104 +248,104 @@
 }
 
 /* Settings */
-.zimaos-settings {
-    padding: 20px;
-    max-width: 800px;
+.ozsync-settings {
+	padding: 20px;
+	max-width: 800px;
 }
 
-.zimaos-settings .setting-item {
-    margin-bottom: 15px;
-    padding: 10px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 6px;
+.ozsync-settings .setting-item {
+	margin-bottom: 15px;
+	padding: 10px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
 }
 
-.zimaos-settings .setting-item-name {
-    font-weight: 600;
-    margin-bottom: 5px;
+.ozsync-settings .setting-item-name {
+	font-weight: 600;
+	margin-bottom: 5px;
 }
 
-.zimaos-settings .setting-item-description {
-    color: var(--text-muted);
-    font-size: 0.9em;
-    margin-bottom: 10px;
+.ozsync-settings .setting-item-description {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin-bottom: 10px;
 }
 
-.zimaos-settings input[type="text"],
-.zimaos-settings input[type="password"],
-.zimaos-settings input[type="number"],
-.zimaos-settings select {
-    width: 100%;
-    padding: 8px;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    background: var(--background-primary);
-    color: var(--text-normal);
+.ozsync-settings input[type="text"],
+.ozsync-settings input[type="password"],
+.ozsync-settings input[type="number"],
+.ozsync-settings select {
+	width: 100%;
+	padding: 8px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	background: var(--background-primary);
+	color: var(--text-normal);
 }
 
-.zimaos-settings button {
-    padding: 8px 16px;
-    border: none;
-    border-radius: 4px;
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
-    cursor: pointer;
-    font-size: 0.9em;
+.ozsync-settings button {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	background: var(--interactive-accent);
+	color: var(--text-on-accent);
+	cursor: pointer;
+	font-size: 0.9em;
 }
 
-.zimaos-settings button:hover {
-    background: var(--interactive-accent-hover);
+.ozsync-settings button:hover {
+	background: var(--interactive-accent-hover);
 }
 
-.zimaos-settings button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+.ozsync-settings button:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
 }
 
-.zimaos-settings .slider {
-    width: 100%;
-    margin: 10px 0;
+.ozsync-settings .slider {
+	width: 100%;
+	margin: 10px 0;
 }
 
-.zimaos-settings .checkbox-container {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+.ozsync-settings .checkbox-container {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
-.zimaos-settings .directory-selection {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-top: 10px;
+.ozsync-settings .directory-selection {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-top: 10px;
 }
 
-.zimaos-settings .directory-path {
-    flex: 1;
-    padding: 8px;
-    background: var(--background-secondary);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    font-family: var(--font-monospace);
-    font-size: 0.9em;
+.ozsync-settings .directory-path {
+	flex: 1;
+	padding: 8px;
+	background: var(--background-secondary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	font-family: var(--font-monospace);
+	font-size: 0.9em;
 }
 
-.zimaos-settings .browse-btn {
-    padding: 8px 12px;
-    background: var(--interactive-normal);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.9em;
+.ozsync-settings .browse-btn {
+	padding: 8px 12px;
+	background: var(--interactive-normal);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 4px;
+	cursor: pointer;
+	font-size: 0.9em;
 }
 
-.zimaos-settings .browse-btn:hover {
-    background: var(--interactive-hover);
+.ozsync-settings .browse-btn:hover {
+	background: var(--interactive-hover);
 }
 
 /* Status View Styles */
-.zimaos-status {
-    padding: 20px;
+.ozsync-status {
+	padding: 20px;
 }
 
 .status-card {

@@ -1,7 +1,7 @@
-// ZimaOS Sync Plugin Types
+// OZSync Plugin Types
 
-export interface ZimaOSSettings {
-	// 连接设置
+export interface OZSyncSettings {
+	// Connection settings
 	serverUrl: string;
 	port: number;
 	username: string;
@@ -12,31 +12,32 @@ export interface ZimaOSSettings {
 	autoSyncEnabled: boolean;
 	syncInterval: number; // in minutes
 	syncScope: 'all' | 'selected';
-	syncDirectory: string; // ZimaOS目录路径
+	syncDirectory: string; // OZSync directory path
 	
 	// Advanced settings
-	conflictResolution: 'local' | 'remote' | 'manual';
+	conflictResolution: 'local' | 'remote';
 	debugMode: boolean;
 }
 
-export const DEFAULT_SETTINGS: ZimaOSSettings = {
-	// 连接设置
+export const DEFAULT_SETTINGS: OZSyncSettings = {
+	// Connection settings
 	serverUrl: 'localhost',
 	port: 8078,
 	username: '',
 	password: '',
 	useHttps: false,
 	autoSyncEnabled: false,
-	syncInterval: 30,
+	syncInterval: 15,
 	syncScope: 'all',
-	syncDirectory: '/media/ZimaOS-HD/Obsidian',
-	conflictResolution: 'manual',
+	syncDirectory: '/media/OZSync-HD/Obsidian',
+	conflictResolution: 'remote',
 	debugMode: false
 };
 
 export interface SyncStatus {
 	isConnected: boolean;
 	lastSyncTime?: Date;
+	nextSyncTime?: Date;
 	syncInProgress: boolean;
 	status: 'idle' | 'syncing' | 'error';
 	pendingFiles: number;
@@ -50,8 +51,8 @@ export interface SyncStatus {
 	startTime?: Date;
 }
 
-// ZimaOS目录信息接口
-export interface ZimaOSDirectory {
+// OZSync directory information interface
+export interface OZSyncDirectory {
 	name: string;
 	path: string;
 	isDirectory: boolean;
@@ -59,7 +60,7 @@ export interface ZimaOSDirectory {
 	lastModified?: Date;
 }
 
-export interface ZimaOSFile {
+export interface OZSyncFile {
 	name: string;
 	path: string;
 	size: number;

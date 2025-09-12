@@ -1,34 +1,58 @@
 import axios, { AxiosInstance, AxiosResponse } from 'axios';
-import { ZimaOSSettings, ZimaOSFile, SyncLog, LoginResponse, TokenData, AuthState, ZimaOSDirectory } from './types';
+import { OZSyncSettings, OZSyncFile, SyncLog, LoginResponse, TokenData, AuthState, OZSyncDirectory } from './types';
 import { Notice } from 'obsidian';
 
-export class ZimaOSClient {
+export class OZSyncClient {
 	private httpClient: AxiosInstance;
-	private settings: ZimaOSSettings;
+	private settings: OZSyncSettings;
 	private logs: SyncLog[] = [];
 	private authState: AuthState = { isAuthenticated: false };
 
-	constructor(settings: ZimaOSSettings) {
+	constructor(settings: OZSyncSettings) {
 		this.settings = settings;
 		this.initializeHttpClient();
 		this.loadStoredAuth();
 	}
 
-	// 登录方法
+	// Login method
 	async login(username?: string, password?: string): Promise<boolean> {
+		console.log('[OZSync Login] Starting login process', {
+			timestamp: new Date().toISOString(),
+			username: username || this.settings.username,
+			hasPassword: !!(password || this.settings.password),
+			serverUrl: this.settings.serverUrl,
+			port: this.settings.port,
+			useHttps: this.settings.useHttps,
+			httpClientBaseURL: this.httpClient?.defaults?.baseURL
+		});
+		
 		try {
 			const loginData = {
 				username: username || this.settings.username,
 				password: password || this.settings.password
 			};
 
-			this.log('info', 'Attempting to login to ZimaOS', { 
+			console.log('[OZSync Login] Preparing login data', {
+				username: loginData.username,
+				hasPassword: !!loginData.password,
+				passwordLength: loginData.password?.length || 0
+			});
+
+			this.log('info', 'Attempting to login to OZSync', { 
 				username: loginData.username, 
 				serverUrl: this.settings.serverUrl,
 				port: this.settings.port
 			});
 			
 			const loginUrl = '/v1/users/login';
+			
+			console.log('[OZSync Login] Sending login request', {
+				url: loginUrl,
+				fullUrl: `${this.httpClient.defaults.baseURL}${loginUrl}`,
+				username: loginData.username,
+				requestMethod: 'POST',
+				headers: { 'Content-Type': 'application/json' }
+			});
 			
 			this.log('info', 'Sending login request', { 
 				url: loginUrl, 
@@ -43,6 +67,14 @@ export class ZimaOSClient {
 				}
 			});
 			
+			console.log('[OZSync Login] Received login response', {
+				status: response.status,
+				statusText: response.statusText,
+				hasData: !!response.data,
+				responseData: response.data,
+				successCode: response.data?.success
+			});
+			
 			this.log('info', 'Login response received', { 
 				status: response.status, 
 				statusText: response.statusText,
@@ -52,6 +84,15 @@ export class ZimaOSClient {
 			
 			if (response.data.success === 200) {
 				const tokenData = response.data.data.token;
+				console.log('[OZSync Login] Login successful, processing token data', {
+					hasAccessToken: !!tokenData.access_token,
+					hasRefreshToken: !!tokenData.refresh_token,
+					expiresAt: tokenData.expires_at,
+					accessTokenPrefix: tokenData.access_token?.substring(0, 10) + '...',
+					refreshTokenPrefix: tokenData.refresh_token?.substring(0, 10) + '...',
+					userInfo: response.data.data.user
+				});
+				
 				this.log('info', 'Token data received', { 
 					hasAccessToken: !!tokenData.access_token,
 					hasRefreshToken: !!tokenData.refresh_token,
@@ -68,14 +109,30 @@ export class ZimaOSClient {
 					}
 				};
 				
-				// 保存token到本地存储
+				// Save token to local storage
+			console.log('[OZSync Login] Saving authentication state to local storage');
 				this.saveAuth();
 				
+				console.log('[OZSync Login] Login process completed', {
+					username: loginData.username,
+					isAuthenticated: this.authState.isAuthenticated,
+					hasToken: !!this.authState.tokenData?.access_token
+				});
+				
 				this.log('info', 'Login successful, auth state updated', { username: loginData.username });
+				
+				// Immediately notify connection status update after successful login
+			console.log('[OZSync Login] Login successful, connection should be established');
+				
 				return true;
 			} else {
 				// Extract error message from API response
 				const errorMessage = response.data.message || 'Login failed';
+				console.error('[OZSync Login] Login failed', {
+					successCode: response.data.success,
+					errorMessage,
+					responseData: response.data
+				});
 				this.log('error', errorMessage, response.data);
 				// Show error notice with red styling
 				this.showErrorNotice(errorMessage);
@@ -90,6 +147,22 @@ export class ZimaOSClient {
 			} else if (error.message) {
 				errorMessage = error.message;
 			}
+			
+			console.error('[OZSync Login] Login request exception', {
+				errorMessage,
+				error: error.message,
+				status: error.response?.status,
+				statusText: error.response?.statusText,
+				responseData: error.response?.data,
+				code: error.code,
+				stack: error.stack,
+				config: {
+					url: error.config?.url,
+					method: error.config?.method,
+					baseURL: error.config?.baseURL,
+					headers: error.config?.headers
+				}
+			});
 			
 			this.log('error', errorMessage, { 
 				error: error.message, 
@@ -109,12 +182,12 @@ export class ZimaOSClient {
 		}
 	}
 
-	// 刷新token
+	// Refresh token
 	async refreshToken(): Promise<boolean> {
 		try {
 			if (!this.authState.tokenData?.refresh_token) {
 				const errorMsg = 'No refresh token available';
-				console.error('[ZimaOS Token Refresh] Error:', errorMsg);
+				console.error('[OZSync Token Refresh] Error:', errorMsg);
 				throw new Error(errorMsg);
 			}
 
@@ -123,7 +196,7 @@ export class ZimaOSClient {
 				refresh_token: this.authState.tokenData.refresh_token
 			};
 			
-			console.log('[ZimaOS Token Refresh] Attempting token refresh:', {
+			console.log('[OZSync Token Refresh] Attempting token refresh:', {
 				url: refreshUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${refreshUrl}`,
 				hasRefreshToken: !!this.authState.tokenData.refresh_token,
@@ -153,7 +226,7 @@ export class ZimaOSClient {
 					responseData: response.data,
 					message: errorMessage
 				};
-				console.error('[ZimaOS Token Refresh] API returned error:', errorDetails);
+				console.error('[OZSync Token Refresh] API returned error:', errorDetails);
 				this.log('error', 'Token refresh API error', errorDetails);
 				this.showErrorNotice(errorMessage);
 				throw new Error(errorMessage);
@@ -183,33 +256,33 @@ export class ZimaOSClient {
 		}
 	}
 
-	// 保存认证信息到本地存储
+	// Save authentication info to local storage
 	private saveAuth(): void {
 		try {
-			localStorage.setItem('zimaos_auth', JSON.stringify(this.authState));
+			localStorage.setItem('ozsync_auth', JSON.stringify(this.authState));
 		} catch (error) {
 			this.log('error', 'Failed to save authentication info', error);
 		}
 	}
 
-	// 从本地存储加载认证信息
+	// Load authentication info from local storage
 	private loadStoredAuth(): void {
 		try {
-			const stored = localStorage.getItem('zimaos_auth');
+			const stored = localStorage.getItem('ozsync_auth');
 			if (stored) {
 				const authData = JSON.parse(stored) as AuthState;
 				// 检查token是否过期
 				if (authData.tokenData && authData.tokenData.expires_at > Date.now() / 1000) {
 					this.authState = authData;
-					console.log('ZimaOS Auth: Valid token loaded from storage');
+					console.log('OZSync Auth: Valid token loaded from storage');
 				} else {
 					// Token过期，但不自动刷新，避免插件启动时的API请求
 					// 刷新将在用户主动操作时进行
 					if (authData.tokenData?.refresh_token) {
 						this.authState = authData;
-						console.log('ZimaOS Auth: Expired token found, will refresh when needed');
+						console.log('OZSync Auth: Expired token found, will refresh when needed');
 					} else {
-						console.log('ZimaOS Auth: No valid token or refresh token found');
+						console.log('OZSync Auth: No valid token or refresh token found');
 					}
 				}
 			}
@@ -221,7 +294,7 @@ export class ZimaOSClient {
 	// 清除认证信息
 	private clearAuth(): void {
 		this.authState = { isAuthenticated: false };
-		localStorage.removeItem('zimaos_auth');
+		localStorage.removeItem('ozsync_auth');
 	}
 
 	// 获取认证状态
@@ -241,7 +314,7 @@ export class ZimaOSClient {
 		const bufferTime = 5 * 60; // 5分钟缓冲时间
 
 		if (expiresAt <= currentTime + bufferTime) {
-			console.log('[ZimaOS Token Check] Token is expiring soon, attempting refresh');
+			console.log('[OZSync Token Check] Token is expiring soon, attempting refresh');
 			return await this.refreshToken();
 		}
 
@@ -341,7 +414,7 @@ export class ZimaOSClient {
 				};
 				
 				// 输出详细错误到控制台
-				console.error('[ZimaOS HTTP Error] Detailed error information:', {
+				console.error('[OZSync HTTP Error] Detailed error information:', {
 					timestamp: new Date().toISOString(),
 					...errorDetails
 				});
@@ -350,15 +423,25 @@ export class ZimaOSClient {
 				
 				if (error.response?.status === 401 && this.authState.tokenData?.refresh_token && !originalRequest._retry) {
 					originalRequest._retry = true;
-					this.log('info', 'Attempting token refresh due to 401 error');
+					this.log('info', 'Attempting token refresh due to 401 error', {
+						url: originalRequest?.url,
+						method: originalRequest?.method,
+						hasRefreshToken: !!this.authState.tokenData?.refresh_token
+					});
 					try {
 						const refreshed = await this.refreshToken();
-						if (refreshed) {
+						if (refreshed && this.authState.tokenData?.access_token) {
+							// 更新请求头中的token
 							originalRequest.headers.Authorization = this.authState.tokenData.access_token;
-							this.log('info', 'Retrying request with refreshed token');
+							this.log('info', 'Retrying request with refreshed token', {
+								url: originalRequest?.url,
+								newTokenPrefix: this.authState.tokenData.access_token?.substring(0, 10) + '...'
+							});
+							// 重新发送原始请求
 							return this.httpClient.request(originalRequest);
 						} else {
-							this.log('error', 'Token refresh failed, cannot retry request');
+							this.log('error', 'Token refresh failed, clearing auth and rejecting request');
+							this.clearAuth();
 						}
 					} catch (refreshError: any) {
 						const refreshErrorDetails = {
@@ -371,7 +454,7 @@ export class ZimaOSClient {
 						console.error('[ZimaOS Token Refresh Error] Detailed error:', refreshErrorDetails);
 						this.log('error', 'Token refresh error', refreshErrorDetails);
 						this.clearAuth();
-						throw refreshError;
+						// 不要抛出refreshError，而是继续处理原始的401错误
 					}
 				}
 				return Promise.reject(error);
@@ -380,35 +463,68 @@ export class ZimaOSClient {
 	}
 
 	/**
-	 * Test connection to ZimaOS server
+	 * Test connection to OZSync server
 	 */
 	async testConnection(): Promise<boolean> {
+		console.log('[OZSync Client] 开始连接测试', {
+			timestamp: new Date().toISOString(),
+			serverUrl: this.settings.serverUrl,
+			port: this.settings.port,
+			useHttps: this.settings.useHttps,
+			currentAuthState: {
+				isAuthenticated: this.authState.isAuthenticated,
+				hasToken: !!this.authState.tokenData?.access_token,
+				hasRefreshToken: !!this.authState.tokenData?.refresh_token
+			}
+		});
+		
 		try {
 			this.log('info', 'Starting connection test');
 			
 			// 首先尝试登录
+			console.log('[OZSync Client] 尝试登录进行连接测试');
 			this.log('info', 'Attempting login for connection test');
 			const loginSuccess = await this.login();
 			if (!loginSuccess) {
+				console.error('[OZSync Client] 连接测试期间登录失败');
 				this.log('error', 'Login failed during connection test');
 				return false;
 			}
+			console.log('[OZSync Client] 登录成功，测试目录列表功能');
 			this.log('info', 'Login successful, testing directory listing');
 			
 			// 测试新API连接 - 尝试列出根目录
 			try {
+				console.log('[OZSync Client] 调用listDirectories API测试连接');
 				const result = await this.listDirectories('/');
+				console.log('[OZSync Client] API连接测试成功', {
+					directoriesCount: result.length,
+					directories: result.map(d => ({ name: d.name, path: d.path, isDirectory: d.isDirectory }))
+				});
 				this.log('info', 'Connection test successful', { directoriesCount: result.length });
 			} catch (apiError) {
-				this.log('error', 'ZimaOS API connection failed', apiError);
-				this.showErrorNotice('ZimaOS API connection failed');
+				console.error('[OZSync Client] OZSync API连接失败', {
+					error: apiError,
+					message: (apiError as any)?.message,
+					status: (apiError as any)?.response?.status,
+					statusText: (apiError as any)?.response?.statusText,
+					responseData: (apiError as any)?.response?.data
+				});
+				this.log('error', 'OZSync API connection failed', apiError);
+				this.showErrorNotice('OZSync API connection failed');
 				return false;
 			}
 			
-			this.log('info', 'ZimaOS connection test successful');
+			console.log('[OZSync Client] OZSync连接测试完全成功');
+			this.log('info', 'OZSync connection test successful');
 			return true;
 		} catch (error: any) {
 			const errorMessage = error.message || 'Connection test failed';
+			console.error('[OZSync Client] 连接测试失败', {
+				error: error.message,
+				stack: error.stack,
+				fullError: error
+			});
 			this.log('error', 'Connection test failed', { error: error.message, stack: error.stack });
 			this.showErrorNotice(errorMessage);
 			return false;
@@ -418,9 +534,9 @@ export class ZimaOSClient {
 
 
 	/**
-	 * List directories using new ZimaOS API
+	 * List directories using new OZSync API
 	 */
-	async listDirectories(path: string = '/'): Promise<ZimaOSDirectory[]> {
+	async listDirectories(path: string = '/'): Promise<OZSyncDirectory[]> {
 		try {
 			// 确保token有效
 			const tokenValid = await this.ensureValidToken();
@@ -480,9 +596,9 @@ export class ZimaOSClient {
 	}
 
 	/**
-	 * List files in a directory using new ZimaOS API
+	 * List files in a directory using new OZSync API
 	 */
-	async listFiles(path: string = '/'): Promise<ZimaOSFile[]> {
+	async listFiles(path: string = '/'): Promise<OZSyncFile[]> {
 		try {
 			// 确保token有效
 			const tokenValid = await this.ensureValidToken();
@@ -545,9 +661,9 @@ export class ZimaOSClient {
 	/**
 	 * Recursively get all files in a directory and its subdirectories
 	 */
-	async getAllFilesRecursive(path: string = '/'): Promise<ZimaOSFile[]> {
+	async getAllFilesRecursive(path: string = '/'): Promise<OZSyncFile[]> {
 		try {
-			const allFiles: ZimaOSFile[] = [];
+			const allFiles: OZSyncFile[] = [];
 			
 			// Get files in current directory
 			const files = await this.listFiles(path);
@@ -582,7 +698,7 @@ export class ZimaOSClient {
 			}
 
 			const requestUrl = '/v2_1/files/mediainfo';
-			console.log('[ZimaOS File Stats] Requesting file stats:', {
+			console.log('[OZSync File Stats] Requesting file stats:', {
 				url: requestUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${requestUrl}`,
 				filePaths,
@@ -617,18 +733,18 @@ export class ZimaOSClient {
 				fullUrl: error.config?.baseURL ? `${error.config.baseURL}${error.config.url}` : error.config?.url
 			};
 			
-			console.error('[ZimaOS File Stats] Failed to get file stats:', {
+			// 对于文件不存在的情况（404或500状态码），静默处理，不报错
+			if (error.response?.status === 404 || error.response?.status === 500) {
+				console.log('[OZSync File Stats] File not found (status: ' + error.response?.status + '), returning empty array');
+				return [];
+			}
+			
+			console.error('[OZSync File Stats] Failed to get file stats:', {
 				timestamp: new Date().toISOString(),
 				...errorDetails
 			});
 			
 			this.log('error', 'Failed to get file stats', errorDetails);
-			
-			// 对于500状态码（文件不存在），返回空数组而不是抛出错误
-			if (error.response?.status === 500) {
-				console.log('[ZimaOS File Stats] File not found (500), returning empty array');
-				return [];
-			}
 			
 			if (showNotice) {
 				const errorMessage = error.response?.data?.message || error.message || 'Failed to get file stats';
@@ -704,7 +820,7 @@ export class ZimaOSClient {
 				fullUrl: error.config?.baseURL ? `${error.config.baseURL}${error.config.url}` : error.config?.url
 			};
 			
-			console.error('[ZimaOS Upload File] Failed to upload file:', {
+			console.error('[OZSync Upload File] Failed to upload file:', {
 				timestamp: new Date().toISOString(),
 				...errorDetails
 			});
@@ -720,7 +836,7 @@ export class ZimaOSClient {
 	}
 
 	/**
-	 * Upload a file using new ZimaOS API
+	 * Upload a file using new OZSync API
 	 */
 	async uploadFileV2(targetPath: string, fileName: string, content: string | Buffer): Promise<boolean> {
 		try {
@@ -833,7 +949,7 @@ export class ZimaOSClient {
 				transformRequest: [(data) => {
 					// 如果是FormData，直接返回，不进行JSON序列化
 					if (data instanceof FormData) {
-						console.log('[ZimaOS Upload V2] Sending FormData directly');
+						console.log('[OZSync Upload V2] Sending FormData directly');
 						return data;
 					}
 					return data;
@@ -921,7 +1037,7 @@ export class ZimaOSClient {
 	}
 
 	/**
-	 * Delete a file from ZimaOS using new API v2
+	 * Delete a file from OZSync using new API v2
 	 */
 	async deleteFileV2(remotePath: string): Promise<boolean> {
 		try {
@@ -958,7 +1074,7 @@ export class ZimaOSClient {
 	}
 
 	/**
-	 * Delete a file from ZimaOS using new API (alias for backward compatibility)
+	 * Delete a file from OZSync using new API (alias for backward compatibility)
 	 */
 	async deleteFile(remotePath: string): Promise<boolean> {
 		return this.deleteFileV2(remotePath);
@@ -976,7 +1092,7 @@ export class ZimaOSClient {
 			const requestUrl = '/v2_1/files/folder';
 			const requestData = { path: path };
 			
-			console.log('[ZimaOS Create Directory] Creating directory:', {
+			console.log('[OZSync Create Directory] Creating directory:', {
 				url: requestUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${requestUrl}`,
 				path,
@@ -989,7 +1105,7 @@ export class ZimaOSClient {
 				}
 			});
 			
-			console.log('[ZimaOS Create Directory] Response received:', {
+			console.log('[OZSync Create Directory] Response received:', {
 				status: response.status,
 				statusText: response.statusText,
 				responseData: response.data,
@@ -1011,7 +1127,7 @@ export class ZimaOSClient {
 				fullUrl: error.config?.baseURL ? `${error.config.baseURL}${error.config.url}` : error.config?.url
 			};
 			
-			console.error('[ZimaOS Create Directory] Failed to create directory:', {
+			console.error('[OZSync Create Directory] Failed to create directory:', {
 				timestamp: new Date().toISOString(),
 				...errorDetails
 			});
@@ -1061,10 +1177,10 @@ export class ZimaOSClient {
 		
 		// Show error notices to user
 		if (level === 'error') {
-			new Notice(`ZimaOS Sync Error: ${message}`);
+			new Notice(`OZSync Error: ${message}`);
 		}
 		
-		console.log(`[ZimaOS Sync] ${level.toUpperCase()}: ${message}`, details);
+		console.log(`[OZSync] ${level.toUpperCase()}: ${message}`, details);
 	}
 
 	/**
@@ -1084,7 +1200,7 @@ export class ZimaOSClient {
 	/**
 	 * Update connection configuration
 	 */
-	updateSettings(settings: ZimaOSSettings): void {
+	updateSettings(settings: OZSyncSettings): void {
 		this.settings = settings;
 		
 		// Update HTTP client base URL

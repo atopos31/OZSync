@@ -1,6 +1,6 @@
 import { TFile, TFolder, Vault, Notice, App } from 'obsidian';
-import { ZimaOSClient } from './zimaos-client';
-import { ZimaOSSettings, SyncStatus, SyncOperation, ZimaOSFile } from './types';
+import { OZSyncClient } from './ozsync-client';
+import { OZSyncSettings, SyncStatus, SyncOperation, OZSyncFile } from './types';
 import { format } from 'date-fns';
 
 /**
@@ -20,13 +20,13 @@ import { format } from 'date-fns';
  * 3. AUTO-SYNC FUNCTIONALITY:
  *    When auto-sync is enabled, this plugin:
  *    - Monitors ALL files within the vault directory
- *    - Automatically uploads changed files to ZimaOS cloud storage
+ *    - Automatically uploads changed files to OZSync cloud storage
  *    - Runs at regular intervals (configurable in settings)
- *    - Syncs to user-selected directory on ZimaOS
+ *    - Syncs to user-selected directory on OZSync
  * 
  * 4. SYNC SCOPE AND BEHAVIOR:
  *    - WHAT GETS SYNCED: All markdown files (.md) and attachments in the vault
- *    - WHERE IT GOES: Files are uploaded to user-selected directory on ZimaOS
+ *    - WHERE IT GOES: Files are uploaded to user-selected directory on OZSync
  *    - WHEN IT SYNCS: Automatically at set intervals when auto-sync is enabled
  *    - EXCLUSIONS: System files (.obsidian folder) are automatically excluded
  * 
@@ -40,17 +40,19 @@ import { format } from 'date-fns';
 
 export class SyncManager {
 	private vault: Vault;
-	private client: ZimaOSClient;
-	private settings: ZimaOSSettings;
+	private client: OZSyncClient;
+	private settings: OZSyncSettings;
 	private syncStatus: SyncStatus;
 	private syncOperations: SyncOperation[] = [];
 	private syncInterval: number | null = null;
 	private addLog: (log: any) => void;
+	private onStatusUpdate?: (status: Partial<SyncStatus>) => void;
 
-	constructor(client: ZimaOSClient, settings: ZimaOSSettings, addLog: (log: any) => void) {
+	constructor(client: OZSyncClient, settings: OZSyncSettings, addLog: (log: any) => void, onStatusUpdate?: (status: Partial<SyncStatus>) => void) {
 		this.client = client;
 		this.settings = settings;
 		this.addLog = addLog;
+		this.onStatusUpdate = onStatusUpdate;
 		this.vault = (window as any).app.vault;
 		this.syncStatus = {
 			isConnected: false,
@@ -72,40 +74,89 @@ export class SyncManager {
 	 */
 	async initialize(): Promise<void> {
 		try {
-			// 插件启动时不自动测试连接，避免不必要的API请求
-			// 连接测试将在用户主动操作时进行
+			// Don't auto-test connection on plugin startup to avoid unnecessary API requests
+			// Connection test will be performed when user actively operates
 			this.syncStatus.isConnected = false;
 			
-			console.log('ZimaOS Sync: Manager initialized (connection will be tested when needed)');
+			console.log('OZSync: Manager initialized (connection will be tested when needed)');
 		} catch (error) {
 			console.error('Failed to initialize sync manager:', error);
 		}
 	}
 
 	/**
-	 * Test connection to ZimaOS server
+	 * Test connection to OZSync server
 	 */
 	async testConnection(): Promise<boolean> {
 		try {
-			this.syncStatus.isConnected = await this.client.testConnection();
+			console.log('[SyncManager] Testing connection to OZSync server...');
+			console.log('[SyncManager] Current sync status before test:', {
+				isConnected: this.syncStatus.isConnected,
+				clientExists: !!this.client,
+				timestamp: new Date().toISOString()
+			});
+			
+			console.log('[SyncManager] Calling client.testConnection()...');
+			const connectionResult = await this.client.testConnection();
+			console.log('[SyncManager] Client testConnection returned:', connectionResult);
+			
+			this.syncStatus.isConnected = connectionResult;
+			
+			console.log('[SyncManager] Connection test result:', {
+				isConnected: this.syncStatus.isConnected,
+				connectionResult,
+				timestamp: new Date().toISOString()
+			});
 			
 			if (this.syncStatus.isConnected) {
-			// After successful connection, ensure sync directory exists
-			await this.ensureSyncDirectory();
+				console.log('[SyncManager] Connection successful, ensuring sync directory...');
+				// After successful connection, ensure sync directory exists
+				await this.ensureSyncDirectory();
+				console.log('[SyncManager] Sync directory ensured');
+				
+				// Note: Auto sync is managed by main plugin, not started here
+				console.log('[SyncManager] Connection successful - auto sync will be managed by main plugin');
+				
+				new Notice('OZSync: Connection test successful');
+			} else {
+				console.log('[SyncManager] Connection test failed - no connection established');
+				new Notice('OZSync: Connection test failed');
+			}
 			
-			// Note: Auto sync is managed by main plugin, not started here
-			console.log('Connection successful - auto sync will be managed by main plugin');
+			// Notify main plugin of connection status update
+			console.log('[SyncManager] Notifying main plugin of connection status:', {
+				isConnected: this.syncStatus.isConnected,
+				hasCallback: !!this.onStatusUpdate,
+				callbackFunction: this.onStatusUpdate,
+				timestamp: new Date().toISOString()
+			});
 			
-			new Notice('ZimaOS Sync: Connection test successful');
-		} else {
-				new Notice('ZimaOS Sync: Connection test failed');
+			if (this.onStatusUpdate) {
+				console.log('[SyncManager] Calling onStatusUpdate callback...');
+				this.onStatusUpdate({ isConnected: this.syncStatus.isConnected });
+				console.log('[SyncManager] onStatusUpdate callback called successfully');
+			} else {
+				console.warn('[SyncManager] No onStatusUpdate callback available!');
 			}
 			
 			return this.syncStatus.isConnected;
 		} catch (error) {
-			console.error('Connection test failed:', error);
+			console.error('[SyncManager] Connection test failed with error:', error);
+			console.error('[SyncManager] Error details:', {
+				errorMessage: error.message,
+				errorStack: error.stack,
+				timestamp: new Date().toISOString()
+			});
+			
 			this.syncStatus.isConnected = false;
-			new Notice('ZimaOS Sync: Connection test failed');
+			// Notify main plugin of connection status update
+			console.log('[SyncManager] Notifying main plugin of connection failure');
+			if (this.onStatusUpdate) {
+				this.onStatusUpdate({ isConnected: false });
+			} else {
+				console.warn('[SyncManager] No onStatusUpdate callback available for error notification!');
+			}
+			new Notice('OZSync: Connection test failed');
 			return false;
 		}
 	}
@@ -128,11 +179,18 @@ export class SyncManager {
 		}
 		
 		const intervalMs = this.settings.syncInterval * 60 * 1000; // Convert minutes to milliseconds
+		
+		// Calculate and set next sync time
+		this.updateNextSyncTime();
+		
 		this.syncInterval = window.setInterval(() => {
 			this.performSync();
+			// Update next sync time after each sync
+			this.updateNextSyncTime();
 		}, intervalMs);
 		
 		console.log(`Auto sync started with interval: ${this.settings.syncInterval} minutes`);
+		console.log(`Next sync scheduled for: ${this.syncStatus.nextSyncTime?.toLocaleString()}`);
 	}
 
 	/**
@@ -142,7 +200,32 @@ export class SyncManager {
 		if (this.syncInterval) {
 			clearInterval(this.syncInterval);
 			this.syncInterval = null;
+			// Clear next sync time when auto sync is stopped
+			this.syncStatus.nextSyncTime = undefined;
 			console.log('Auto sync stopped');
+		}
+	}
+
+	/**
+	 * Update next sync time based on current settings
+	 */
+	private updateNextSyncTime(): void {
+		if (this.settings.autoSyncEnabled && this.syncInterval) {
+			const intervalMs = this.settings.syncInterval * 60 * 1000;
+			this.syncStatus.nextSyncTime = new Date(Date.now() + intervalMs);
+		} else {
+			this.syncStatus.nextSyncTime = undefined;
+		}
+		// Notify main plugin of status update
+		this.notifyStatusUpdate({ nextSyncTime: this.syncStatus.nextSyncTime });
+	}
+
+	/**
+	 * Notify main plugin of status update
+	 */
+	private notifyStatusUpdate(updates: Partial<SyncStatus>): void {
+		if (this.onStatusUpdate) {
+			this.onStatusUpdate(updates);
 		}
 	}
 
@@ -256,7 +339,7 @@ export class SyncManager {
 	 * Only system folders are automatically excluded:
 	 * - .obsidian/ (plugin configurations, not user content)
 	 * - .trash/ (deleted files)
-	 * This ensures all user content gets synced to ZimaOS
+	 * This ensures all user content gets synced to OZSync
 	 */
 	private shouldExcludeFile(file: TFile): boolean {
 		// Only exclude system folders
@@ -367,7 +450,7 @@ export class SyncManager {
 				await this.client.createDirectory(targetDir);
 			}
 			
-			// Upload to ZimaOS using new API
+			// Upload to OZSync using new API
 			const success = await this.client.uploadFileV2(targetDir, file.name, content);
 			
 			operation.status = success ? 'completed' : 'failed';
@@ -420,12 +503,12 @@ export class SyncManager {
 	/**
 	 * Compare local and remote files to determine sync operations
 	 */
-	private async compareFiles(localFiles: TFile[], remoteFiles: ZimaOSFile[]): Promise<SyncOperation[]> {
+	private async compareFiles(localFiles: TFile[], remoteFiles: OZSyncFile[]): Promise<SyncOperation[]> {
 		const operations: SyncOperation[] = [];
 		
 		// Create maps for easier lookup
 		const localFileMap = new Map<string, TFile>();
-		const remoteFileMap = new Map<string, ZimaOSFile>();
+		const remoteFileMap = new Map<string, OZSyncFile>();
 		
 		// Map local files by their remote path
 		for (const file of localFiles) {
@@ -454,33 +537,64 @@ export class SyncManager {
 					file: localFile
 				});
 			} else {
-				// Both files exist - compare modification times
+				// Both files exist - apply conflict resolution strategy
 				const localModified = localFile.stat.mtime;
 				const remoteModified = remoteFile.lastModified;
 				
-				if (localModified > remoteModified) {
-					// Local file is newer - upload
-					operations.push({
-						id: `upload-${localFile.path}`,
-						type: 'upload',
-						filePath: localFile.path,
-						status: 'pending',
-						progress: 0,
-						timestamp: new Date(),
-						file: localFile
-					});
-				} else if (remoteModified > localModified) {
-					// Remote file is newer - download
-					operations.push({
-						id: `download-${remotePath}`,
-						type: 'download',
-						filePath: localFile.path,
-						status: 'pending',
-						progress: 0,
-						timestamp: new Date(),
-						remotePath: remotePath,
-						localPath: localFile.path
-					});
+				// Apply conflict resolution strategy
+				if (this.settings.conflictResolution === 'local') {
+					// 以本地为准 - 总是上传本地文件
+					if (localModified !== remoteModified) {
+						operations.push({
+							id: `upload-${localFile.path}`,
+							type: 'upload',
+							filePath: localFile.path,
+							status: 'pending',
+							progress: 0,
+							timestamp: new Date(),
+							file: localFile
+						});
+					}
+				} else if (this.settings.conflictResolution === 'remote') {
+					// 以服务器为准 - 总是下载远程文件
+					if (localModified !== remoteModified) {
+						operations.push({
+							id: `download-${remotePath}`,
+							type: 'download',
+							filePath: localFile.path,
+							status: 'pending',
+							progress: 0,
+							timestamp: new Date(),
+							remotePath: remotePath,
+							localPath: localFile.path
+						});
+					}
+				} else {
+					// 默认行为：基于时间戳比较
+					if (localModified > remoteModified) {
+						// Local file is newer - upload
+						operations.push({
+							id: `upload-${localFile.path}`,
+							type: 'upload',
+							filePath: localFile.path,
+							status: 'pending',
+							progress: 0,
+							timestamp: new Date(),
+							file: localFile
+						});
+					} else if (remoteModified > localModified) {
+						// Remote file is newer - download
+						operations.push({
+							id: `download-${remotePath}`,
+							type: 'download',
+							filePath: localFile.path,
+							status: 'pending',
+							progress: 0,
+							timestamp: new Date(),
+							remotePath: remotePath,
+							localPath: localFile.path
+						});
+					}
 				}
 				// If modification times are equal, no sync needed
 			}
@@ -514,7 +628,7 @@ export class SyncManager {
 		try {
 			console.log(`Downloading file: ${remotePath} -> ${localPath}`);
 			
-			// Download file content from ZimaOS
+			// Download file content from OZSync
 			const content = await this.client.downloadFile(remotePath);
 			
 			if (content === null) {
@@ -578,7 +692,7 @@ export class SyncManager {
 	 */
 	private getRemotePath(localPath: string): string {
 		// Use the sync directory as configured by the user
-		const syncDir = this.settings.syncDirectory || '/media/ZimaOS-HD/Obsidian';
+		const syncDir = this.settings.syncDirectory || '/media/OZSync-HD/Obsidian';
 		
 		// Remove leading slash from localPath if present
 		const cleanLocalPath = localPath.startsWith('/') ? localPath.substring(1) : localPath;
@@ -695,7 +809,7 @@ export class SyncManager {
 	/**
 	 * Update settings
 	 */
-	updateSettings(settings: ZimaOSSettings): void {
+	updateSettings(settings: OZSyncSettings): void {
 		this.settings = settings;
 		
 		// Restart auto sync if settings changed

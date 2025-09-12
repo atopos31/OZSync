@@ -1,15 +1,15 @@
 import { ItemView, WorkspaceLeaf, Notice } from 'obsidian';
-import ZimaOSSyncPlugin from '../../main';
+import OZSyncPlugin from '../../main';
 import { SyncStatus, SyncOperation, SyncLog } from '../types';
 import { format } from 'date-fns';
 
-export const STATUS_VIEW_TYPE = 'zimaos-sync-status';
+export const STATUS_VIEW_TYPE = 'ozsync-status';
 
 export class StatusView extends ItemView {
-	plugin: ZimaOSSyncPlugin;
+	plugin: OZSyncPlugin;
 	private refreshInterval: number | null = null;
 
-	constructor(leaf: WorkspaceLeaf, plugin: ZimaOSSyncPlugin) {
+	constructor(leaf: WorkspaceLeaf, plugin: OZSyncPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
@@ -19,7 +19,7 @@ export class StatusView extends ItemView {
 	}
 
 	getDisplayText(): string {
-		return 'ZimaOS Sync Status';
+		return 'OZSync Status';
 	}
 
 	getIcon(): string {
@@ -45,11 +45,11 @@ export class StatusView extends ItemView {
 	private renderView(): void {
 		const container = this.containerEl.children[1];
 		container.empty();
-		container.addClass('zimaos-sync-status-view');
+		container.addClass('ozsync-status-view');
 
 		// Header
 		const header = container.createEl('div', { cls: 'status-header' });
-		header.createEl('h2', { text: 'ZimaOS Sync Status' });
+		header.createEl('h2', { text: 'OZSync Status' });
 		
 		const refreshBtn = header.createEl('button', { 
 			text: '🔄 Refresh',
@@ -86,7 +86,7 @@ export class StatusView extends ItemView {
 		indicator.textContent = status.isConnected ? '🟢' : '🔴';
 		
 		const statusText = statusEl.createEl('span', { 
-			text: status.isConnected ? 'Connected to ZimaOS' : 'Disconnected',
+			text: status.isConnected ? 'Connected to OZSync' : 'Disconnected',
 			cls: 'status-text'
 		});
 
@@ -169,6 +169,40 @@ export class StatusView extends ItemView {
 				? `ON (every ${this.plugin.settings.syncInterval} minutes)`
 				: 'OFF'
 		});
+
+		// Next sync time (only show when auto sync is enabled)
+		if (this.plugin.settings.autoSyncEnabled && syncStatus.nextSyncTime && !syncStatus.syncInProgress) {
+			const nextSyncItem = detailsContainer.createEl('div', { cls: 'sync-detail-item' });
+			nextSyncItem.createEl('span', { text: 'Next Sync:' });
+			
+			const nextSyncTimeSpan = nextSyncItem.createEl('span');
+			const updateNextSyncTime = () => {
+				if (syncStatus.nextSyncTime) {
+					const now = Date.now();
+					const nextSyncDate = new Date(syncStatus.nextSyncTime);
+					const nextSync = nextSyncDate.getTime();
+					const timeLeft = nextSync - now;
+					
+					if (timeLeft > 0) {
+						const minutes = Math.floor(timeLeft / (1000 * 60));
+						const seconds = Math.floor((timeLeft % (1000 * 60)) / 1000);
+						nextSyncTimeSpan.textContent = `${nextSyncDate.toLocaleTimeString()} (in ${minutes}m ${seconds}s)`;
+					} else {
+						nextSyncTimeSpan.textContent = 'Starting soon...';
+					}
+					nextSyncTimeSpan.style.display = 'inline';
+				} else {
+					nextSyncTimeSpan.style.display = 'none';
+				}
+			};
+			
+			// 初始更新
+			updateNextSyncTime();
+			// Update countdown every second
+			const interval = setInterval(updateNextSyncTime, 1000);
+			// Clean up interval when view is refreshed
+			setTimeout(() => clearInterval(interval), 30000);
+		}
 	}
 
 	private renderRecentOperations(container: HTMLElement): void {
@@ -299,9 +333,9 @@ export class StatusView extends ItemView {
 
 
 
-		// Login to ZimaOS
+		// Login to OZSync
 		const testBtn = actionsContainer.createEl('button', { 
-			text: '🔗 Login to ZimaOS',
+			text: '🔗 Login to OZSync',
 			cls: 'action-button'
 		});
 		testBtn.onclick = async () => {
@@ -309,7 +343,7 @@ export class StatusView extends ItemView {
 			testBtn.disabled = true;
 			
 			try {
-				const success = await this.plugin.zimaosClient.login(
+				const success = await this.plugin.ozsyncClient.login(
 					this.plugin.settings.username,
 					this.plugin.settings.password
 				);
@@ -326,7 +360,7 @@ export class StatusView extends ItemView {
 			}
 			
 			setTimeout(() => {
-				testBtn.textContent = '🔗 Login to ZimaOS';
+				testBtn.textContent = '🔗 Login to OZSync';
 				testBtn.disabled = false;
 			}, 3000);
 		};
@@ -339,7 +373,7 @@ export class StatusView extends ItemView {
 		settingsBtn.onclick = () => {
 			// Open settings tab
 			(this.app as any).setting.open();
-			(this.app as any).setting.openTabById('zimaos-sync');
+			(this.app as any).setting.openTabById('ozsync');
 		};
 	}
 
