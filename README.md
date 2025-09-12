@@ -191,6 +191,14 @@ If you encounter any issues or have questions:
 3. Create an issue on [GitHub](https://github.com/LinkLeong/OZSync/issues)
 4. Include debug logs and system information when reporting issues
 
+## Sponsor
+
+If you find OZSync helpful, please consider supporting the development:
+
+[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/linkliang)
+
+Your support helps maintain and improve this plugin. Thank you!
+
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
