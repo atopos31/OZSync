@@ -1,0 +1,11 @@
+{
+	"id": "obsidian-ozsync",
+	"name": "OZSync",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Sync your Obsidian notes with OZSync for backup, cloud access, and cross-device synchronization.",
+	"author": "OZSync Community",
+	"authorUrl": "https://github.com/ozsync-community",
+	"fundingUrl": "https://github.com/sponsors/ozsync-community",
+	"isDesktopOnly": false
+}
