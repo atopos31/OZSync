@@ -1,8 +1,182 @@
-/*
+/* ZimaOS Sync Plugin Styles */
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* Authentication Status */
+.zimaos-auth-success {
+	color: var(--text-success);
+	font-weight: 500;
+}
 
-If your plugin does not need CSS, delete this file.
+.zimaos-auth-error {
+	color: var(--text-error);
+	font-weight: 500;
+}
 
-*/
+.zimaos-auth-info {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin-top: 4px;
+}
+
+/* Directory Browser Modal */
+.directory-path {
+	margin-bottom: 16px;
+	padding: 8px 12px;
+	background: var(--background-secondary);
+	border-radius: 6px;
+	font-family: var(--font-monospace);
+}
+
+.directory-list {
+	max-height: 400px;
+	overflow-y: auto;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	margin-bottom: 16px;
+}
+
+.directory-item {
+	display: flex;
+	align-items: center;
+	padding: 8px 12px;
+	cursor: pointer;
+	border-bottom: 1px solid var(--background-modifier-border);
+	transition: background-color 0.2s ease;
+}
+
+.directory-item:hover {
+	background: var(--background-modifier-hover);
+}
+
+.directory-item:last-child {
+	border-bottom: none;
+}
+
+.directory-item.parent-dir {
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.directory-icon {
+	margin-right: 8px;
+	font-size: 16px;
+}
+
+.directory-name {
+	flex: 1;
+	font-weight: 500;
+}
+
+.directory-size {
+	color: var(--text-muted);
+	font-size: 0.9em;
+	margin-left: auto;
+}
+
+.loading-text {
+	text-align: center;
+	padding: 20px;
+	color: var(--text-muted);
+}
+
+.error-text {
+	text-align: center;
+	padding: 20px;
+	color: var(--text-error);
+}
+
+.empty-text {
+	text-align: center;
+	padding: 20px;
+	color: var(--text-muted);
+	font-style: italic;
+}
+
+.modal-button-container {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 16px;
+}
+
+/* Sync Status Display */
+.sync-status-container {
+	padding: 12px;
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 6px;
+	margin: 8px 0;
+}
+
+.sync-status-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+}
+
+.sync-status-title {
+	font-weight: 600;
+	color: var(--text-normal);
+}
+
+.sync-status-indicator {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 0.9em;
+}
+
+.sync-status-indicator.syncing {
+	color: var(--text-accent);
+}
+
+.sync-status-indicator.idle {
+	color: var(--text-muted);
+}
+
+.sync-status-indicator.error {
+	color: var(--text-error);
+}
+
+.sync-progress {
+	margin: 8px 0;
+}
+
+.sync-progress-bar {
+	width: 100%;
+	height: 6px;
+	background: var(--background-secondary);
+	border-radius: 3px;
+	overflow: hidden;
+}
+
+.sync-progress-fill {
+	height: 100%;
+	background: var(--text-accent);
+	transition: width 0.3s ease;
+}
+
+.sync-details {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 8px;
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
+.sync-detail-item {
+	display: flex;
+	justify-content: space-between;
+}
+
+.sync-speed {
+	font-family: var(--font-monospace);
+	color: var(--text-accent);
+}
+
+/* Settings sections */
+.setting-item h3 {
+	margin-top: 24px;
+	margin-bottom: 8px;
+	color: var(--text-accent);
+	font-size: 1.1em;
+}

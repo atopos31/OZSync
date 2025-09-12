@@ -1,0 +1,715 @@
+import { TFile, TFolder, Vault, Notice, App } from 'obsidian';
+import { ZimaOSClient } from './zimaos-client';
+import { ZimaOSSettings, SyncStatus, SyncOperation, ZimaOSFile } from './types';
+import { format } from 'date-fns';
+
+/**
+ * OBSIDIAN VAULT STRUCTURE AND AUTO-SYNC EXPLANATION
+ * 
+ * 1. WHAT IS AN OBSIDIAN VAULT?
+ *    An Obsidian vault is a DIRECTORY (folder) on your computer that contains:
+ *    - Markdown files (.md) - your notes and documents
+ *    - Attachments (images, PDFs, etc.) in various formats
+ *    - Configuration files in the .obsidian subdirectory
+ *    - Subdirectories to organize your content
+ * 
+ * 2. VAULT LOCATION:
+ *    The vault directory is located at: /Users/liangjianli/Documents/oasis/
+ *    This is the root directory that contains all your Obsidian content.
+ * 
+ * 3. AUTO-SYNC FUNCTIONALITY:
+ *    When auto-sync is enabled, this plugin:
+ *    - Monitors ALL files within the vault directory
+ *    - Automatically uploads changed files to ZimaOS cloud storage
+ *    - Runs at regular intervals (configurable in settings)
+ *    - Syncs to user-selected directory on ZimaOS
+ * 
+ * 4. SYNC SCOPE AND BEHAVIOR:
+ *    - WHAT GETS SYNCED: All markdown files (.md) and attachments in the vault
+ *    - WHERE IT GOES: Files are uploaded to user-selected directory on ZimaOS
+ *    - WHEN IT SYNCS: Automatically at set intervals when auto-sync is enabled
+ *    - EXCLUSIONS: System files (.obsidian folder) are automatically excluded
+ * 
+ * 5. FILE STRUCTURE MAPPING:
+ *    Local vault: /Users/liangjianli/Documents/oasis/MyNote.md
+ *    Remote path: {syncDirectory}/MyNote.md
+ *    
+ *    Local vault: /Users/liangjianli/Documents/oasis/Folder/SubNote.md
+ *    Remote path: {syncDirectory}/Folder/SubNote.md
+ */
+
+export class SyncManager {
+	private vault: Vault;
+	private client: ZimaOSClient;
+	private settings: ZimaOSSettings;
+	private syncStatus: SyncStatus;
+	private syncOperations: SyncOperation[] = [];
+	private syncInterval: number | null = null;
+	private addLog: (log: any) => void;
+
+	constructor(client: ZimaOSClient, settings: ZimaOSSettings, addLog: (log: any) => void) {
+		this.client = client;
+		this.settings = settings;
+		this.addLog = addLog;
+		this.vault = (window as any).app.vault;
+		this.syncStatus = {
+			isConnected: false,
+			syncInProgress: false,
+			status: 'idle',
+			pendingFiles: 0,
+			processedFiles: 0,
+			totalFiles: 0,
+			syncSpeed: 0,
+			bytesTransferred: 0,
+			totalBytes: 0,
+			errorCount: 0,
+			startTime: undefined
+		};
+	}
+
+	/**
+	 * Initialize sync manager
+	 */
+	async initialize(): Promise<void> {
+		try {
+			// 插件启动时不自动测试连接，避免不必要的API请求
+			// 连接测试将在用户主动操作时进行
+			this.syncStatus.isConnected = false;
+			
+			console.log('ZimaOS Sync: Manager initialized (connection will be tested when needed)');
+		} catch (error) {
+			console.error('Failed to initialize sync manager:', error);
+		}
+	}
+
+	/**
+	 * Test connection to ZimaOS server
+	 */
+	async testConnection(): Promise<boolean> {
+		try {
+			this.syncStatus.isConnected = await this.client.testConnection();
+			
+			if (this.syncStatus.isConnected) {
+			// After successful connection, ensure sync directory exists
+			await this.ensureSyncDirectory();
+			
+			// Note: Auto sync is managed by main plugin, not started here
+			console.log('Connection successful - auto sync will be managed by main plugin');
+			
+			new Notice('ZimaOS Sync: Connection test successful');
+		} else {
+				new Notice('ZimaOS Sync: Connection test failed');
+			}
+			
+			return this.syncStatus.isConnected;
+		} catch (error) {
+			console.error('Connection test failed:', error);
+			this.syncStatus.isConnected = false;
+			new Notice('ZimaOS Sync: Connection test failed');
+			return false;
+		}
+	}
+
+	/**
+	 * Start automatic synchronization
+	 * 
+	 * AUTO-SYNC WORKING PRINCIPLE:
+	 * 1. Creates a timer that runs at user-defined intervals (default: every 15 minutes)
+	 * 2. Each timer tick triggers performSync() which:
+	 *    - Scans the entire vault directory for changes
+	 *    - Compares local file modification times with remote versions
+	 *    - Uploads only files that have been modified since last sync
+	 * 3. Respects user exclusion settings (folders/file types to skip)
+	 * 4. Runs continuously until manually stopped or plugin disabled
+	 */
+	startAutoSync(): void {
+		if (this.syncInterval) {
+			clearInterval(this.syncInterval);
+		}
+		
+		const intervalMs = this.settings.syncInterval * 60 * 1000; // Convert minutes to milliseconds
+		this.syncInterval = window.setInterval(() => {
+			this.performSync();
+		}, intervalMs);
+		
+		console.log(`Auto sync started with interval: ${this.settings.syncInterval} minutes`);
+	}
+
+	/**
+	 * Stop automatic synchronization
+	 */
+	stopAutoSync(): void {
+		if (this.syncInterval) {
+			clearInterval(this.syncInterval);
+			this.syncInterval = null;
+			console.log('Auto sync stopped');
+		}
+	}
+
+	/**
+	 * Perform synchronization
+	 */
+	async performSync(): Promise<void> {
+		if (this.syncStatus.syncInProgress) {
+			console.log('Sync already in progress, skipping');
+			return;
+		}
+
+		this.syncStatus.syncInProgress = true;
+		this.syncStatus.status = 'syncing';
+		this.syncStatus.startTime = new Date();
+		this.syncStatus.errorCount = 0;
+		this.syncStatus.processedFiles = 0;
+		this.syncStatus.bytesTransferred = 0;
+		this.syncStatus.totalBytes = 0;
+
+		try {
+			console.log('Starting bidirectional sync operation');
+			
+			// Get local files that need to be synced
+			const localFiles = await this.getFilesToSync();
+			
+			// Get all remote files
+			const remoteFiles = await this.client.getAllFilesRecursive(this.settings.syncDirectory);
+			
+			// Create sync operations based on file comparison
+			const syncOperations = await this.compareFiles(localFiles, remoteFiles);
+			
+			this.syncStatus.totalFiles = syncOperations.length;
+			this.syncStatus.pendingFiles = syncOperations.length;
+
+			if (syncOperations.length === 0) {
+				console.log('No files need to be synced');
+				this.syncStatus.status = 'idle';
+				this.syncStatus.syncInProgress = false;
+				this.syncStatus.lastSyncTime = new Date();
+				return;
+			}
+
+			console.log(`Found ${syncOperations.length} sync operations to perform`);
+
+			// Execute sync operations
+			for (const operation of syncOperations) {
+				try {
+					if (operation.type === 'upload' && operation.file) {
+					await this.syncFile(operation.file);
+				} else if (operation.type === 'download' && operation.remotePath && operation.localPath) {
+					await this.downloadFile(operation.remotePath, operation.localPath);
+				}
+					this.syncStatus.processedFiles++;
+					this.syncStatus.pendingFiles--;
+				} catch (error) {
+					this.syncStatus.errorCount++;
+					console.error(`Failed to ${operation.type} file: ${operation.file?.path || operation.remotePath}`, error);
+				}
+			}
+
+			this.syncStatus.status = 'idle';
+			this.syncStatus.lastSyncTime = new Date();
+			console.log(`Bidirectional sync completed. Processed: ${this.syncStatus.processedFiles}, Errors: ${this.syncStatus.errorCount}`);
+
+		} catch (error) {
+			this.syncStatus.status = 'error';
+			this.syncStatus.errorCount++;
+			console.error('Sync operation failed', error);
+		} finally {
+			this.syncStatus.syncInProgress = false;
+		}
+	}
+
+	/**
+	 * Get files that need to be synchronized
+	 * 
+	 * SYNC SCOPE DETERMINATION:
+	 * 1. Gets ALL files in the vault (markdown and attachments)
+	 * 2. Applies system exclusion filters:
+	 *    - Skips files in .obsidian folder (system configurations)
+	 *    - Skips files in .trash folder (deleted files)
+	 * 3. Checks modification times:
+	 *    - Compares local file mtime with remote file timestamp
+	 *    - Only includes files that are newer locally than remotely
+	 * 4. Returns final list of files that need uploading
+	 */
+	private async getFilesToSync(): Promise<TFile[]> {
+		const allFiles = this.vault.getFiles();
+		const filesToSync: TFile[] = [];
+
+		for (const file of allFiles) {
+			// Check if file should be excluded (only system folders)
+			if (this.shouldExcludeFile(file)) {
+				continue;
+			}
+
+			// Check if file needs sync (modified since last sync)
+			if (await this.needsSync(file)) {
+				filesToSync.push(file);
+			}
+		}
+
+		return filesToSync;
+	}
+
+	/**
+	 * Check if a file should be excluded from sync
+	 * 
+	 * EXCLUSION LOGIC:
+	 * Only system folders are automatically excluded:
+	 * - .obsidian/ (plugin configurations, not user content)
+	 * - .trash/ (deleted files)
+	 * This ensures all user content gets synced to ZimaOS
+	 */
+	private shouldExcludeFile(file: TFile): boolean {
+		// Only exclude system folders
+		const systemFolders = ['.obsidian/', '.trash/'];
+		
+		for (const systemFolder of systemFolders) {
+			if (file.path.startsWith(systemFolder)) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Check if a file needs synchronization
+	 */
+	private async needsSync(file: TFile): Promise<boolean> {
+		try {
+			const remotePath = this.getRemotePath(file.path);
+			const remoteStats = await this.client.getFileStatsV2([remotePath]);
+			const remoteFile = remoteStats && remoteStats.length > 0 ? remoteStats[0] : null;
+			
+			if (!remoteFile) {
+				// File doesn't exist remotely, needs sync
+				return true;
+			}
+			
+			// Compare modification times
+			// Note: remoteFile structure may vary, adjust based on actual API response
+			const remoteModTime = remoteFile?.lastModified ? new Date(remoteFile.lastModified).getTime() : 0;
+			return file.stat.mtime > remoteModTime;
+		} catch (error: any) {
+			const errorDetails = {
+				methodName: 'needsSync',
+				filePath: file.path,
+				remotePath: this.getRemotePath(file.path),
+				localMtime: file.stat.mtime,
+				message: error.message,
+				status: error.response?.status,
+				responseData: error.response?.data,
+				stack: error.stack
+			};
+			
+			console.error('[Sync Manager] Failed to check if file needs sync:', {
+				timestamp: new Date().toISOString(),
+				...errorDetails
+			});
+			
+			this.addLog({
+				type: 'error',
+				message: 'Failed to check file sync status',
+				details: errorDetails,
+				timestamp: new Date().toISOString()
+			});
+			
+			// If we can't check, assume it needs sync
+			return true;
+		}
+	}
+
+	/**
+	 * Sync a single file
+	 */
+	private async syncFile(file: TFile): Promise<void> {
+		try {
+			const operation: SyncOperation = {
+				id: this.generateOperationId(),
+				type: 'upload',
+				filePath: file.path,
+				status: 'in-progress',
+				progress: 0,
+				timestamp: new Date()
+			};
+			
+			this.syncOperations.push(operation);
+			
+			console.log('[Sync Manager] Starting file sync:', {
+				filePath: file.path,
+				fileSize: file.stat.size,
+				fileExtension: file.extension,
+				operationId: operation.id
+			});
+			
+			// Read file content
+			let content: string | Buffer;
+			if (file.extension === 'md') {
+				content = await this.vault.read(file);
+			} else {
+				const arrayBuffer = await this.vault.readBinary(file);
+				content = Buffer.from(arrayBuffer);
+			}
+			
+			// Get target directory path (without filename)
+			const remotePath = this.getRemotePath(file.path);
+			const targetDir = remotePath.substring(0, remotePath.lastIndexOf('/'));
+			
+			console.log('[Sync Manager] File sync paths:', {
+				localPath: file.path,
+				remotePath,
+				targetDir,
+				contentSize: content instanceof Buffer ? content.length : content.length
+			});
+			
+			// Ensure target directory exists
+			if (targetDir && !(await this.client.fileExistsV2(targetDir))) {
+				console.log('[Sync Manager] Creating target directory:', targetDir);
+				await this.client.createDirectory(targetDir);
+			}
+			
+			// Upload to ZimaOS using new API
+			const success = await this.client.uploadFileV2(targetDir, file.name, content);
+			
+			operation.status = success ? 'completed' : 'failed';
+			operation.progress = 100;
+			
+			if (success) {
+				this.syncStatus.bytesTransferred += file.stat.size;
+				console.log('[Sync Manager] File sync completed:', {
+					filePath: file.path,
+					bytesTransferred: file.stat.size,
+					totalBytesTransferred: this.syncStatus.bytesTransferred
+				});
+			} else {
+				operation.error = 'Upload failed';
+				this.syncStatus.errorCount++;
+				console.error('[Sync Manager] File sync failed:', {
+					filePath: file.path,
+					reason: 'Upload returned false'
+				});
+			}
+		} catch (error: any) {
+			const errorDetails = {
+				methodName: 'syncFile',
+				filePath: file.path,
+				fileSize: file.stat.size,
+				fileExtension: file.extension,
+				remotePath: this.getRemotePath(file.path),
+				message: error.message,
+				status: error.response?.status,
+				responseData: error.response?.data,
+				stack: error.stack
+			};
+			
+			console.error('[Sync Manager] Failed to sync file:', {
+				timestamp: new Date().toISOString(),
+				...errorDetails
+			});
+			
+			this.addLog({
+				type: 'error',
+				message: `Failed to sync file: ${file.path}`,
+				details: errorDetails,
+				timestamp: new Date().toISOString()
+			});
+			
+			this.syncStatus.errorCount++;
+		}
+	}
+
+	/**
+	 * Compare local and remote files to determine sync operations
+	 */
+	private async compareFiles(localFiles: TFile[], remoteFiles: ZimaOSFile[]): Promise<SyncOperation[]> {
+		const operations: SyncOperation[] = [];
+		
+		// Create maps for easier lookup
+		const localFileMap = new Map<string, TFile>();
+		const remoteFileMap = new Map<string, ZimaOSFile>();
+		
+		// Map local files by their remote path
+		for (const file of localFiles) {
+			const remotePath = this.getRemotePath(file.path);
+			localFileMap.set(remotePath, file);
+		}
+		
+		// Map remote files by their path
+		for (const file of remoteFiles) {
+			remoteFileMap.set(file.path, file);
+		}
+		
+		// Check local files against remote files
+		for (const [remotePath, localFile] of localFileMap) {
+			const remoteFile = remoteFileMap.get(remotePath);
+			
+			if (!remoteFile) {
+				// Local file doesn't exist on remote - upload
+				operations.push({
+					id: `upload-${localFile.path}`,
+					type: 'upload',
+					filePath: localFile.path,
+					status: 'pending',
+					progress: 0,
+					timestamp: new Date(),
+					file: localFile
+				});
+			} else {
+				// Both files exist - compare modification times
+				const localModified = localFile.stat.mtime;
+				const remoteModified = remoteFile.lastModified;
+				
+				if (localModified > remoteModified) {
+					// Local file is newer - upload
+					operations.push({
+						id: `upload-${localFile.path}`,
+						type: 'upload',
+						filePath: localFile.path,
+						status: 'pending',
+						progress: 0,
+						timestamp: new Date(),
+						file: localFile
+					});
+				} else if (remoteModified > localModified) {
+					// Remote file is newer - download
+					operations.push({
+						id: `download-${remotePath}`,
+						type: 'download',
+						filePath: localFile.path,
+						status: 'pending',
+						progress: 0,
+						timestamp: new Date(),
+						remotePath: remotePath,
+						localPath: localFile.path
+					});
+				}
+				// If modification times are equal, no sync needed
+			}
+		}
+		
+		// Check for remote files that don't exist locally
+		for (const [remotePath, remoteFile] of remoteFileMap) {
+			if (!localFileMap.has(remotePath)) {
+				// Remote file doesn't exist locally - download
+				const localPath = this.getLocalPath(remotePath);
+				operations.push({
+					id: `download-${remotePath}`,
+					type: 'download',
+					filePath: localPath,
+					status: 'pending',
+					progress: 0,
+					timestamp: new Date(),
+					remotePath: remotePath,
+					localPath: localPath
+				});
+			}
+		}
+		
+		return operations;
+	}
+	
+	/**
+	 * Download a file from remote to local
+	 */
+	private async downloadFile(remotePath: string, localPath: string): Promise<void> {
+		try {
+			console.log(`Downloading file: ${remotePath} -> ${localPath}`);
+			
+			// Download file content from ZimaOS
+			const content = await this.client.downloadFile(remotePath);
+			
+			if (content === null) {
+				throw new Error('Failed to download file content');
+			}
+			
+			// Ensure parent directory exists
+			const parentDir = localPath.substring(0, localPath.lastIndexOf('/'));
+			if (parentDir && !(await this.vault.adapter.exists(parentDir))) {
+				await this.vault.adapter.mkdir(parentDir);
+			}
+			
+			// Write file to vault
+			if (await this.vault.adapter.exists(localPath)) {
+				// File exists, modify it
+				await this.vault.adapter.write(localPath, content);
+			} else {
+				// File doesn't exist, create it
+				await this.vault.create(localPath, content);
+			}
+			
+			console.log(`File downloaded successfully: ${localPath}`);
+			
+		} catch (error) {
+			console.error(`Failed to download file: ${remotePath}`, error);
+			throw error;
+		}
+	}
+	
+	/**
+	 * Convert remote path to local path
+	 */
+	private getLocalPath(remotePath: string): string {
+		// Remove the sync directory prefix from remote path
+		const syncDir = this.settings.syncDirectory;
+		if (remotePath.startsWith(syncDir)) {
+			return remotePath.substring(syncDir.length + 1); // +1 for the trailing slash
+		}
+		return remotePath;
+	}
+	
+	/**
+	 * Update sync speed calculation
+	 */
+	private updateSyncSpeed(): void {
+		if (!this.syncStatus.startTime) return;
+		
+		const elapsedMs = Date.now() - this.syncStatus.startTime.getTime();
+		const elapsedSeconds = elapsedMs / 1000;
+		
+		if (elapsedSeconds > 0) {
+			this.syncStatus.syncSpeed = this.syncStatus.bytesTransferred / elapsedSeconds;
+		}
+	}
+
+
+
+	/**
+	 * Get remote path for a local file
+	 * Uses the configured sync directory directly without modification
+	 */
+	private getRemotePath(localPath: string): string {
+		// Use the sync directory as configured by the user
+		const syncDir = this.settings.syncDirectory || '/media/ZimaOS-HD/Obsidian';
+		
+		// Remove leading slash from localPath if present
+		const cleanLocalPath = localPath.startsWith('/') ? localPath.substring(1) : localPath;
+		
+		// Combine paths with proper separator, avoiding double slashes
+		const remotePath = syncDir.endsWith('/') ? 
+			`${syncDir}${cleanLocalPath}` : 
+			`${syncDir}/${cleanLocalPath}`;
+		
+		console.log('[Sync Manager] Path mapping:', {
+			localPath,
+			cleanLocalPath,
+			syncDir,
+			remotePath
+		});
+		
+		return remotePath;
+	}
+
+	/**
+	 * Ensure sync directory exists
+	 */
+	private async ensureSyncDirectory(): Promise<void> {
+		if (!this.settings.syncDirectory) {
+			console.warn('[Sync Manager] No sync directory configured');
+			return;
+		}
+		
+		try {
+			// Use the sync directory as configured by the user
+			const syncDir = this.settings.syncDirectory;
+			
+			console.log('[Sync Manager] Checking sync directory:', {
+				syncDirectory: syncDir
+			});
+			
+			if (!(await this.client.fileExistsV2(syncDir))) {
+				console.log('[Sync Manager] Creating sync directory:', syncDir);
+				await this.client.createDirectory(syncDir);
+				console.log('[Sync Manager] Sync directory created successfully');
+			} else {
+				console.log('[Sync Manager] Sync directory already exists');
+			}
+		} catch (error: any) {
+			const errorDetails = {
+				methodName: 'ensureSyncDirectory',
+				syncDirectory: this.settings.syncDirectory,
+				message: error.message,
+				status: error.response?.status,
+				responseData: error.response?.data,
+				stack: error.stack
+			};
+			
+			console.error('[Sync Manager] Failed to ensure sync directory:', {
+				timestamp: new Date().toISOString(),
+				...errorDetails
+			});
+			
+			this.addLog({
+				type: 'error',
+				message: 'Failed to ensure sync directory exists',
+				details: errorDetails,
+				timestamp: new Date().toISOString()
+			});
+			
+			throw error;
+		}
+	}
+
+
+
+
+
+
+
+
+
+	/**
+	 * Generate operation ID
+	 */
+	private generateOperationId(): string {
+		return Date.now().toString(36) + Math.random().toString(36).substr(2);
+	}
+
+
+
+	/**
+	 * Format file size
+	 */
+	private formatFileSize(bytes: number): string {
+		if (bytes === 0) return '0 Bytes';
+		const k = 1024;
+		const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+	}
+
+	/**
+	 * Get sync status
+	 */
+	getSyncStatus(): SyncStatus {
+		return { ...this.syncStatus };
+	}
+
+	/**
+	 * Get sync operations
+	 */
+	getSyncOperations(): SyncOperation[] {
+		return [...this.syncOperations];
+	}
+
+
+
+	/**
+	 * Update settings
+	 */
+	updateSettings(settings: ZimaOSSettings): void {
+		this.settings = settings;
+		
+		// Restart auto sync if settings changed
+		if (settings.autoSyncEnabled) {
+			this.startAutoSync();
+		} else {
+			this.stopAutoSync();
+		}
+	}
+
+	/**
+	 * Cleanup
+	 */
+	destroy(): void {
+		this.stopAutoSync();
+	}
+}

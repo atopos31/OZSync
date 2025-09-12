@@ -1,0 +1,490 @@
+/* Authentication status styles */
+.auth-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.auth-status.connected {
+    color: var(--text-success);
+}
+
+.auth-status.disconnected {
+    color: var(--text-error);
+}
+
+.auth-status.connecting {
+    color: var(--text-accent);
+}
+
+/* Sync Status styles */
+.sync-status-container {
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.sync-status-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.sync-status-title {
+    font-weight: 600;
+    font-size: 1.1em;
+}
+
+.sync-status-indicator {
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+}
+
+.sync-status-indicator.idle {
+    color: var(--text-success);
+    background: var(--background-modifier-success);
+}
+
+.sync-status-indicator.syncing {
+    color: var(--text-accent);
+    background: var(--background-modifier-accent);
+    animation: pulse 2s infinite;
+}
+
+.sync-status-indicator.error {
+    color: var(--text-error);
+    background: var(--background-modifier-error);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.sync-progress {
+    margin-bottom: 12px;
+}
+
+.sync-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--background-modifier-border);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.sync-progress-fill {
+    height: 100%;
+    background: var(--interactive-accent);
+    transition: width 0.3s ease;
+    border-radius: 4px;
+}
+
+.sync-details {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 8px;
+}
+
+.sync-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 4px 0;
+    font-size: 0.9em;
+}
+
+.sync-detail-item span:first-child {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.sync-detail-item span:last-child {
+    font-weight: 600;
+}
+
+.sync-speed {
+    color: var(--text-accent) !important;
+}
+
+.error-text {
+    color: var(--text-error);
+    font-style: italic;
+}
+
+/* Directory browser modal styles */
+.directory-browser-modal {
+    width: 500px;
+    max-height: 600px;
+}
+
+.directory-browser-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.directory-browser-path {
+    font-family: var(--font-monospace);
+    background: var(--background-secondary);
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    flex: 1;
+}
+
+.directory-browser-content {
+    max-height: 400px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+}
+
+.directory-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background-color 0.2s;
+}
+
+.directory-item:hover {
+    background: var(--background-modifier-hover);
+}
+
+.directory-item.selected {
+    background: var(--background-modifier-accent);
+    color: var(--text-accent);
+}
+
+.directory-icon {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
+.directory-name {
+    flex: 1;
+    font-size: 0.9em;
+}
+
+.directory-browser-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+/* Settings styles */
+.setting-item {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.setting-item:last-child {
+    border-bottom: none;
+}
+
+.setting-item-info {
+    margin-bottom: 8px;
+}
+
+.setting-item-name {
+    font-weight: 500;
+    margin-bottom: 4px;
+}
+
+.setting-item-description {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    line-height: 1.4;
+}
+
+.setting-item-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.directory-selection {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.directory-path {
+    flex: 1;
+    font-family: var(--font-monospace);
+    background: var(--background-secondary);
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    color: var(--text-muted);
+}
+
+.directory-browse-btn {
+    padding: 6px 12px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: background-color 0.2s;
+}
+
+.directory-browse-btn:hover {
+    background: var(--interactive-accent-hover);
+}
+
+/* Settings */
+.zimaos-settings {
+    padding: 20px;
+    max-width: 800px;
+}
+
+.zimaos-settings .setting-item {
+    margin-bottom: 15px;
+    padding: 10px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+}
+
+.zimaos-settings .setting-item-name {
+    font-weight: 600;
+    margin-bottom: 5px;
+}
+
+.zimaos-settings .setting-item-description {
+    color: var(--text-muted);
+    font-size: 0.9em;
+    margin-bottom: 10px;
+}
+
+.zimaos-settings input[type="text"],
+.zimaos-settings input[type="password"],
+.zimaos-settings input[type="number"],
+.zimaos-settings select {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    background: var(--background-primary);
+    color: var(--text-normal);
+}
+
+.zimaos-settings button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.zimaos-settings button:hover {
+    background: var(--interactive-accent-hover);
+}
+
+.zimaos-settings button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.zimaos-settings .slider {
+    width: 100%;
+    margin: 10px 0;
+}
+
+.zimaos-settings .checkbox-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.zimaos-settings .directory-selection {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.zimaos-settings .directory-path {
+    flex: 1;
+    padding: 8px;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    font-family: var(--font-monospace);
+    font-size: 0.9em;
+}
+
+.zimaos-settings .browse-btn {
+    padding: 8px 12px;
+    background: var(--interactive-normal);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.9em;
+}
+
+.zimaos-settings .browse-btn:hover {
+    background: var(--interactive-hover);
+}
+
+/* Status View Styles */
+.zimaos-status {
+    padding: 20px;
+}
+
+.status-card {
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 16px;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.card-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: 600;
+}
+
+.quick-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.action-button {
+    padding: 8px 16px;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    cursor: pointer;
+    font-size: 0.9em;
+    transition: all 0.2s ease;
+}
+
+.action-button:hover {
+    background: var(--interactive-hover);
+    border-color: var(--interactive-accent);
+}
+
+.action-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.operations-list,
+.logs-list {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.operation-item,
+.log-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px;
+    border-bottom: 1px solid var(--background-modifier-border);
+    font-size: 0.9em;
+}
+
+.operation-item:last-child,
+.log-item:last-child {
+    border-bottom: none;
+}
+
+.operation-icons {
+    min-width: 40px;
+}
+
+.operation-file {
+    flex: 1;
+    font-family: var(--font-monospace);
+    font-size: 0.85em;
+}
+
+.operation-time,
+.log-time {
+    color: var(--text-muted);
+    font-size: 0.8em;
+    min-width: 60px;
+}
+
+.operation-error {
+    color: var(--text-error);
+    font-size: 0.8em;
+    margin-top: 4px;
+    padding: 4px 8px;
+    background: var(--background-modifier-error);
+    border-radius: 4px;
+}
+
+.log-level {
+    font-weight: 600;
+    min-width: 60px;
+    text-align: center;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75em;
+}
+
+.log-item.log-error .log-level {
+    background: var(--text-error);
+    color: white;
+}
+
+.log-item.log-warn .log-level {
+    background: var(--text-warning);
+    color: white;
+}
+
+.log-item.log-info .log-level {
+    background: var(--text-accent);
+    color: white;
+}
+
+.log-message {
+    flex: 1;
+}
+
+.log-details {
+    margin-top: 8px;
+    padding: 8px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+    font-family: var(--font-monospace);
+    font-size: 0.8em;
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+
+.no-errors {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 20px;
+    font-style: italic;
+}
