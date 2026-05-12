@@ -22,14 +22,14 @@ export interface OZSyncSettings {
 export const DEFAULT_SETTINGS: OZSyncSettings = {
 	// Connection settings
 	serverUrl: 'localhost',
-	port: 8078,
+	port: 80,
 	username: '',
 	password: '',
 	useHttps: false,
 	autoSyncEnabled: false,
 	syncInterval: 15,
 	syncScope: 'all',
-	syncDirectory: '/media/OZSync-HD/Obsidian',
+	syncDirectory: '/media/ZimaOS-HD/Obsidian',
 	conflictResolution: 'remote',
 	debugMode: false
 };
@@ -66,7 +66,7 @@ export interface OZSyncFile {
 	size: number;
 	lastModified: number; // timestamp in milliseconds
 	isDirectory: boolean;
-	modified: string; // ISO string format
+	modified: string | number; // API returns unix seconds on current ZimaOS
 	mimeType?: string;
 }
 

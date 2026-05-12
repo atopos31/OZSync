@@ -177,6 +177,9 @@ export default class OZSyncPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		if (this.settings.syncDirectory === '/media/OZSync-HD/Obsidian') {
+			this.settings.syncDirectory = DEFAULT_SETTINGS.syncDirectory;
+		}
 	}
 
 	async saveSettings() {
@@ -233,12 +236,18 @@ export default class OZSyncPlugin extends Plugin {
 		// Setup new interval if auto sync is enabled
 		if (this.settings.autoSyncEnabled && this.settings.syncInterval > 0) {
 			const intervalMs = this.settings.syncInterval * 60 * 1000; // Convert minutes to milliseconds
-			this.autoSyncInterval = window.setInterval(() => {
+			const updateNextSyncTime = () => {
+				this.syncManager?.setNextSyncTime(new Date(Date.now() + intervalMs));
+			};
+			updateNextSyncTime();
+			this.autoSyncInterval = window.setInterval(async () => {
 				console.log('Auto sync timer triggered - starting automatic sync');
-				this.performAutoSync();
+				await this.performAutoSync();
+				updateNextSyncTime();
 			}, intervalMs);
 			console.log(`Auto sync enabled: interval set to ${this.settings.syncInterval} minutes (${intervalMs}ms)`);
 		} else {
+			this.syncManager?.setNextSyncTime(undefined);
 			console.log('Auto sync disabled or invalid interval');
 		}
 	}
@@ -254,12 +263,23 @@ export default class OZSyncPlugin extends Plugin {
 		try {
 			console.log('Auto sync: Executing sync operation');
 			await this.syncManager.performSync();
-			this.updateSyncStatus({ syncInProgress: false, lastSyncTime: new Date(), errorCount: 0 });
-			console.log('Auto sync: Completed successfully');
+			const finalStatus = this.syncManager.getSyncStatus();
+			this.updateSyncStatus(finalStatus);
+			console.log('Auto sync: Completed', {
+				status: finalStatus.status,
+				errorCount: finalStatus.errorCount,
+				isConnected: finalStatus.isConnected
+			});
 		} catch (error) {
 			console.error('Auto sync failed:', error);
 			this.logError('Auto sync failed', error);
-			this.updateSyncStatus({ syncInProgress: false, errorCount: this.syncStatus.errorCount + 1 });
+			this.updateSyncStatus({
+				syncInProgress: false,
+				status: 'error',
+				isConnected: false,
+				errorCount: this.syncStatus.errorCount + 1,
+				lastError: error.message
+			});
 		}
 	}
 
@@ -270,23 +290,33 @@ export default class OZSyncPlugin extends Plugin {
 		}
 
 		try {
-			this.updateSyncStatus({ syncInProgress: true });
-			new Notice('Starting sync...');
-			
-			await this.syncManager.performSync();
-			
-			this.updateSyncStatus({ 
-				syncInProgress: false, 
-				lastSyncTime: new Date(), 
+			this.updateSyncStatus({
+				syncInProgress: true,
+				status: 'syncing',
 				errorCount: 0,
 				lastError: undefined
 			});
-			new Notice('Sync completed successfully');
+			new Notice('Starting sync...');
+			
+			await this.syncManager.performSync();
+
+			const finalStatus = this.syncManager.getSyncStatus();
+			this.updateSyncStatus(finalStatus);
+
+			if (finalStatus.status === 'error') {
+				new Notice(`Sync failed: ${finalStatus.lastError || 'Unknown error'}`);
+			} else if (finalStatus.errorCount > 0) {
+				new Notice(`Sync completed with ${finalStatus.errorCount} error(s)`);
+			} else {
+				new Notice('Sync completed successfully');
+			}
 		} catch (error) {
 			console.error('Manual sync failed:', error);
 			this.logError('Manual sync failed', error);
 			this.updateSyncStatus({ 
 				syncInProgress: false, 
+				status: 'error',
+				isConnected: false,
 				errorCount: this.syncStatus.errorCount + 1,
 				lastError: error.message
 			});

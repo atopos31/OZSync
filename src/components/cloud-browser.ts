@@ -7,7 +7,7 @@ export const CLOUD_BROWSER_VIEW_TYPE = 'ozsync-cloud-browser';
 
 export class CloudBrowserView extends ItemView {
 	plugin: OZSyncPlugin;
-	private currentPath: string = '/';
+	private currentPath: string = '/media';
 	private files: OZSyncFile[] = [];
 	private selectedFiles: Set<string> = new Set();
 	private loading: boolean = false;
@@ -339,7 +339,7 @@ export class CloudBrowserView extends ItemView {
 
 	private async downloadFile(file: OZSyncFile): Promise<void> {
 		try {
-				const content = await this.plugin.ozsyncClient.downloadFile(file.path);
+			const content = await this.plugin.ozsyncClient.downloadFileBinary(file.path);
 			
 			// Create file in vault
 			const fileName = file.name;
@@ -352,7 +352,7 @@ export class CloudBrowserView extends ItemView {
 			}
 			
 			if (content !== null) {
-				await this.app.vault.create(filePath, content);
+				await this.app.vault.adapter.writeBinary(filePath, content);
 			}
 			new Notice(`Downloaded: ${fileName}`);
 		} catch (error) {
@@ -419,10 +419,9 @@ export class CloudBrowserView extends ItemView {
 
 	private async previewFile(file: OZSyncFile): Promise<void> {
 		try {
-				const content = await this.plugin.ozsyncClient.downloadFile(file.path);
+			const content = await this.plugin.ozsyncClient.downloadFileBinary(file.path);
 			if (content !== null) {
-				const buffer = new TextEncoder().encode(content).buffer;
-				new PreviewModal(this.app, file, buffer).open();
+				new PreviewModal(this.app, file, content).open();
 			} else {
 				new Notice(`Failed to load content for: ${file.name}`);
 			}

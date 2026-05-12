@@ -229,25 +229,39 @@ export class SyncManager {
 		}
 	}
 
+	private setSyncStatus(updates: Partial<SyncStatus>): void {
+		this.syncStatus = { ...this.syncStatus, ...updates };
+		this.notifyStatusUpdate(updates);
+	}
+
 	/**
 	 * Perform synchronization
 	 */
 	async performSync(): Promise<void> {
 		if (this.syncStatus.syncInProgress) {
 			console.log('Sync already in progress, skipping');
+			this.notifyStatusUpdate(this.getSyncStatus());
 			return;
 		}
 
-		this.syncStatus.syncInProgress = true;
-		this.syncStatus.status = 'syncing';
-		this.syncStatus.startTime = new Date();
-		this.syncStatus.errorCount = 0;
-		this.syncStatus.processedFiles = 0;
-		this.syncStatus.bytesTransferred = 0;
-		this.syncStatus.totalBytes = 0;
+		this.setSyncStatus({
+			syncInProgress: true,
+			status: 'syncing',
+			startTime: new Date(),
+			errorCount: 0,
+			lastError: undefined,
+			processedFiles: 0,
+			pendingFiles: 0,
+			totalFiles: 0,
+			syncSpeed: 0,
+			bytesTransferred: 0,
+			totalBytes: 0
+		});
 
 		try {
 			console.log('Starting bidirectional sync operation');
+			await this.ensureSyncDirectory();
+			this.setSyncStatus({ isConnected: true });
 			
 			// Get local files that need to be synced
 			const localFiles = await this.getFilesToSync();
@@ -258,14 +272,19 @@ export class SyncManager {
 			// Create sync operations based on file comparison
 			const syncOperations = await this.compareFiles(localFiles, remoteFiles);
 			
-			this.syncStatus.totalFiles = syncOperations.length;
-			this.syncStatus.pendingFiles = syncOperations.length;
+			this.setSyncStatus({
+				totalFiles: syncOperations.length,
+				pendingFiles: syncOperations.length
+			});
 
 			if (syncOperations.length === 0) {
 				console.log('No files need to be synced');
-				this.syncStatus.status = 'idle';
-				this.syncStatus.syncInProgress = false;
-				this.syncStatus.lastSyncTime = new Date();
+				this.setSyncStatus({
+					status: 'idle',
+					syncInProgress: false,
+					isConnected: true,
+					lastSyncTime: new Date()
+				});
 				return;
 			}
 
@@ -281,22 +300,42 @@ export class SyncManager {
 				}
 					this.syncStatus.processedFiles++;
 					this.syncStatus.pendingFiles--;
+					this.updateSyncSpeed();
+					this.notifyStatusUpdate({
+						processedFiles: this.syncStatus.processedFiles,
+						pendingFiles: this.syncStatus.pendingFiles,
+						bytesTransferred: this.syncStatus.bytesTransferred,
+						syncSpeed: this.syncStatus.syncSpeed,
+						errorCount: this.syncStatus.errorCount
+					});
 				} catch (error) {
 					this.syncStatus.errorCount++;
 					console.error(`Failed to ${operation.type} file: ${operation.file?.path || operation.remotePath}`, error);
+					this.notifyStatusUpdate({ errorCount: this.syncStatus.errorCount });
 				}
 			}
 
-			this.syncStatus.status = 'idle';
-			this.syncStatus.lastSyncTime = new Date();
+			this.setSyncStatus({
+				status: 'idle',
+				syncInProgress: false,
+				isConnected: true,
+				lastSyncTime: new Date()
+			});
 			console.log(`Bidirectional sync completed. Processed: ${this.syncStatus.processedFiles}, Errors: ${this.syncStatus.errorCount}`);
 
-		} catch (error) {
-			this.syncStatus.status = 'error';
-			this.syncStatus.errorCount++;
+		} catch (error: any) {
+			this.setSyncStatus({
+				status: 'error',
+				syncInProgress: false,
+				isConnected: false,
+				errorCount: this.syncStatus.errorCount + 1,
+				lastError: error?.message || 'Sync operation failed'
+			});
 			console.error('Sync operation failed', error);
 		} finally {
-			this.syncStatus.syncInProgress = false;
+			if (this.syncStatus.syncInProgress) {
+				this.setSyncStatus({ syncInProgress: false });
+			}
 		}
 	}
 
@@ -314,22 +353,7 @@ export class SyncManager {
 	 * 4. Returns final list of files that need uploading
 	 */
 	private async getFilesToSync(): Promise<TFile[]> {
-		const allFiles = this.vault.getFiles();
-		const filesToSync: TFile[] = [];
-
-		for (const file of allFiles) {
-			// Check if file should be excluded (only system folders)
-			if (this.shouldExcludeFile(file)) {
-				continue;
-			}
-
-			// Check if file needs sync (modified since last sync)
-			if (await this.needsSync(file)) {
-				filesToSync.push(file);
-			}
-		}
-
-		return filesToSync;
+		return this.vault.getFiles().filter((file) => !this.shouldExcludeFile(file));
 	}
 
 	/**
@@ -447,7 +471,7 @@ export class SyncManager {
 			// Ensure target directory exists
 			if (targetDir && !(await this.client.fileExistsV2(targetDir))) {
 				console.log('[Sync Manager] Creating target directory:', targetDir);
-				await this.client.createDirectory(targetDir);
+				await this.ensureRemoteDirectory(targetDir);
 			}
 			
 			// Upload to OZSync using new API
@@ -628,26 +652,24 @@ export class SyncManager {
 		try {
 			console.log(`Downloading file: ${remotePath} -> ${localPath}`);
 			
-			// Download file content from OZSync
-			const content = await this.client.downloadFile(remotePath);
-			
-			if (content === null) {
-				throw new Error('Failed to download file content');
-			}
-			
 			// Ensure parent directory exists
 			const parentDir = localPath.substring(0, localPath.lastIndexOf('/'));
 			if (parentDir && !(await this.vault.adapter.exists(parentDir))) {
 				await this.vault.adapter.mkdir(parentDir);
 			}
 			
-			// Write file to vault
-			if (await this.vault.adapter.exists(localPath)) {
-				// File exists, modify it
+			if (this.isTextFile(localPath)) {
+				const content = await this.client.downloadFile(remotePath);
+				if (content === null) {
+					throw new Error('Failed to download file content');
+				}
 				await this.vault.adapter.write(localPath, content);
 			} else {
-				// File doesn't exist, create it
-				await this.vault.create(localPath, content);
+				const content = await this.client.downloadFileBinary(remotePath);
+				if (content === null) {
+					throw new Error('Failed to download file content');
+				}
+				await this.vault.adapter.writeBinary(localPath, content);
 			}
 			
 			console.log(`File downloaded successfully: ${localPath}`);
@@ -656,6 +678,14 @@ export class SyncManager {
 			console.error(`Failed to download file: ${remotePath}`, error);
 			throw error;
 		}
+	}
+
+	private isTextFile(path: string): boolean {
+		const extension = path.split('.').pop()?.toLowerCase() || '';
+		return [
+			'md', 'txt', 'json', 'js', 'ts', 'jsx', 'tsx', 'css', 'html', 'htm',
+			'csv', 'tsv', 'xml', 'svg', 'yaml', 'yml', 'toml', 'ini', 'log'
+		].includes(extension);
 	}
 	
 	/**
@@ -692,7 +722,7 @@ export class SyncManager {
 	 */
 	private getRemotePath(localPath: string): string {
 		// Use the sync directory as configured by the user
-		const syncDir = this.settings.syncDirectory || '/media/OZSync-HD/Obsidian';
+		const syncDir = this.settings.syncDirectory || '/media/ZimaOS-HD/Obsidian';
 		
 		// Remove leading slash from localPath if present
 		const cleanLocalPath = localPath.startsWith('/') ? localPath.substring(1) : localPath;
@@ -731,7 +761,7 @@ export class SyncManager {
 			
 			if (!(await this.client.fileExistsV2(syncDir))) {
 				console.log('[Sync Manager] Creating sync directory:', syncDir);
-				await this.client.createDirectory(syncDir);
+				await this.ensureRemoteDirectory(syncDir);
 				console.log('[Sync Manager] Sync directory created successfully');
 			} else {
 				console.log('[Sync Manager] Sync directory already exists');
@@ -759,6 +789,24 @@ export class SyncManager {
 			});
 			
 			throw error;
+		}
+	}
+
+	private async ensureRemoteDirectory(path: string): Promise<void> {
+		const parts = path.split('/').filter(Boolean);
+		if (parts.length === 0) return;
+
+		const startIndex = parts[0] === 'media' && parts.length > 1 ? 2 : 1;
+		let current = '/' + parts.slice(0, startIndex).join('/');
+
+		for (let i = startIndex; i < parts.length; i++) {
+			current += '/' + parts[i];
+			if (!(await this.client.fileExistsV2(current))) {
+				const created = await this.client.createDirectory(current);
+				if (!created) {
+					throw new Error(`Failed to create remote directory: ${current}`);
+				}
+			}
 		}
 	}
 
@@ -811,13 +859,11 @@ export class SyncManager {
 	 */
 	updateSettings(settings: OZSyncSettings): void {
 		this.settings = settings;
-		
-		// Restart auto sync if settings changed
-		if (settings.autoSyncEnabled) {
-			this.startAutoSync();
-		} else {
-			this.stopAutoSync();
-		}
+	}
+
+	setNextSyncTime(nextSyncTime?: Date): void {
+		this.syncStatus.nextSyncTime = nextSyncTime;
+		this.notifyStatusUpdate({ nextSyncTime });
 	}
 
 	/**

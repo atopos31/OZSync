@@ -246,8 +246,8 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 			.setName('Current Sync Directory')
 			.setDesc('Files will be synchronized to this directory on OZSync')
 			.addText(text => text
-				.setValue(this.plugin.settings.syncDirectory || '/media/OZSync-HD/Obsidian')
-				.setPlaceholder('/media/OZSync-HD/Obsidian')
+				.setValue(this.plugin.settings.syncDirectory || '/media/ZimaOS-HD/Obsidian')
+				.setPlaceholder('/media/ZimaOS-HD/Obsidian')
 				.onChange(async (value) => {
 					this.plugin.settings.syncDirectory = value;
 					await this.plugin.saveSettings();
@@ -284,16 +284,17 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 			}
 
 			// Get current sync directory and convert path
-			const currentPath = this.plugin.settings.syncDirectory || '/media/OZSync-HD';
+			const currentPath = this.plugin.settings.syncDirectory || '/media/ZimaOS-HD';
 			const ozsyncPath = this.convertPathForOZSync(currentPath);
 			
 			// Build OZSync file browser URL with both access_token and refresh_token
-			const baseUrl = 'http://10.0.0.68:8078/modules/icewhale_files/#/files';
-			let fullUrl = `${baseUrl}/${ozsyncPath}?token=${authState.tokenData.access_token}`;
+			const protocol = this.plugin.settings.useHttps ? 'https' : 'http';
+			const baseUrl = `${protocol}://${this.plugin.settings.serverUrl}:${this.plugin.settings.port}/modules/icewhale_files/#/files`;
+			let fullUrl = `${baseUrl}/${ozsyncPath}?token=${encodeURIComponent(authState.tokenData.access_token)}`;
 			
 			// Add refresh_token if available
 			if (authState.tokenData.refresh_token) {
-				fullUrl += `&refresh_token=${authState.tokenData.refresh_token}`;
+				fullUrl += `&refresh_token=${encodeURIComponent(authState.tokenData.refresh_token)}`;
 			}
 			
 			// Open in external browser
@@ -311,7 +312,7 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	 * Removes /media prefix for OZSync file browser
 	 */
 	private convertPathForOZSync(path: string): string {
-		if (!path) return 'OZSync-HD';
+		if (!path) return 'ZimaOS-HD';
 		
 		// Remove /media prefix if present
 		if (path.startsWith('/media/')) {

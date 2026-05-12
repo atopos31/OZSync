@@ -1,4 +1,4 @@
-import axios, { AxiosInstance, AxiosResponse } from 'axios';
+import axios, { AxiosInstance } from 'axios';
 import { OZSyncSettings, OZSyncFile, SyncLog, LoginResponse, TokenData, AuthState, OZSyncDirectory } from './types';
 import { Notice } from 'obsidian';
 
@@ -57,8 +57,7 @@ export class OZSyncClient {
 			this.log('info', 'Sending login request', { 
 				url: loginUrl, 
 				fullUrl: `${this.httpClient.defaults.baseURL}${loginUrl}`,
-				username: loginData.username,
-				requestData: loginData
+				username: loginData.username
 			});
 
 			const response = await this.httpClient.post<LoginResponse>(loginUrl, loginData, {
@@ -71,7 +70,6 @@ export class OZSyncClient {
 				status: response.status,
 				statusText: response.statusText,
 				hasData: !!response.data,
-				responseData: response.data,
 				successCode: response.data?.success
 			});
 			
@@ -180,6 +178,24 @@ export class OZSyncClient {
 			this.showErrorNotice(errorMessage);
 			return false;
 		}
+	}
+
+	private normalizeRemoteModified(modified: any): number {
+		if (typeof modified === 'number') {
+			return modified > 1000000000000 ? modified : modified * 1000;
+		}
+
+		if (typeof modified === 'string') {
+			const numeric = Number(modified);
+			if (!Number.isNaN(numeric)) {
+				return numeric > 1000000000000 ? numeric : numeric * 1000;
+			}
+
+			const parsed = new Date(modified).getTime();
+			return Number.isNaN(parsed) ? Date.now() : parsed;
+		}
+
+		return Date.now();
 	}
 
 	// Refresh token
@@ -544,45 +560,16 @@ export class OZSyncClient {
 				throw new Error('Authentication required');
 			}
 
-			const requestUrl = `/v2_1/files/folder`;
-			const params = { 
-				path: path, 
-				index: '0', 
-				sfz: 'true', 
-				sort: 'name', 
-				direction: 'asc' 
-			};
-			
-			this.log('info', 'Listing directories', { 
-				requestUrl, 
-				params, 
-				fullUrl: `${this.httpClient.defaults.baseURL}${requestUrl}` 
-			});
-			
-			const response = await this.httpClient.get(requestUrl, { params });
-			
-			this.log('info', 'Directory listing response received', { 
-				status: response.status, 
-				dataExists: !!response.data, 
-				contentExists: !!(response.data && response.data.content),
-				itemCount: response.data?.content?.length || 0
-			});
-
-			if (response.data && response.data.content) {
-				const directories = response.data.content.map((item: any) => ({
-					name: item.name,
-					path: item.path,
-					isDirectory: item.is_dir,
-					size: item.size || 0,
-					modified: item.modified || new Date().toISOString()
+			const files = await this.listFiles(path === '/' ? '/media' : path);
+			return files
+				.filter((file) => file.isDirectory)
+				.map((file) => ({
+					name: file.name,
+					path: file.path,
+					isDirectory: true,
+					size: file.size || 0,
+					lastModified: new Date(file.lastModified)
 				}));
-				
-				this.log('info', 'Successfully mapped directories', { count: directories.length });
-				return directories;
-			}
-
-			this.log('warning', 'No data in response', { responseData: response.data });
-			return [];
 		} catch (error: any) {
 			this.log('error', 'Failed to list directories', { 
 				path, 
@@ -607,10 +594,11 @@ export class OZSyncClient {
 			}
 
 			const requestUrl = `/v2_1/files/file`;
+			const normalizedPath = path === '/' ? '/media' : path;
 			const params = { 
-				path: path, 
-				index: '0', 
-				sfz: 'true', 
+				path: normalizedPath, 
+				index: '0',
+				limit: '200',
 				sort: 'name', 
 				direction: 'asc' 
 			};
@@ -637,7 +625,7 @@ export class OZSyncClient {
 					isDirectory: item.is_dir || false,
 					size: item.size || 0,
 					modified: item.modified || new Date().toISOString(),
-					lastModified: item.modified ? new Date(item.modified).getTime() : Date.now()
+					lastModified: this.normalizeRemoteModified(item.modified)
 				}));
 				
 				this.log('info', 'Successfully mapped files', { count: files.length });
@@ -665,12 +653,10 @@ export class OZSyncClient {
 		try {
 			const allFiles: OZSyncFile[] = [];
 			
-			// Get files in current directory
-			const files = await this.listFiles(path);
+			const items = await this.listFiles(path);
+			const files = items.filter((file) => !file.isDirectory);
+			const directories = items.filter((file) => file.isDirectory);
 			allFiles.push(...files);
-			
-			// Get subdirectories
-			const directories = await this.listDirectories(path);
 			
 			// Recursively get files from subdirectories
 			for (const dir of directories) {
@@ -697,7 +683,7 @@ export class OZSyncClient {
 				throw new Error('Authentication required');
 			}
 
-			const requestUrl = '/v2_1/files/mediainfo';
+			const requestUrl = '/v2_1/files/file/stats';
 			console.log('[OZSync File Stats] Requesting file stats:', {
 				url: requestUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${requestUrl}`,
@@ -714,8 +700,11 @@ export class OZSyncClient {
 				dataLength: Array.isArray(response.data) ? response.data.length : 'not array'
 			});
 			
-			if (response.data) {
+			if (Array.isArray(response.data)) {
 				return response.data;
+			}
+			if (Array.isArray(response.data?.data)) {
+				return response.data.data;
 			}
 			return [];
 		} catch (error: any) {
@@ -921,6 +910,7 @@ export class OZSyncClient {
 			
 			// 使用正确的FormData格式 - 根据用户提供的curl命令
 			formData.append('path', targetPath);
+			formData.append('modTime', Math.floor(Date.now() / 1000).toString());
 			formData.append('file', blob, fileName); // 使用'file'字段而不是'files'
 
 			console.log('[ZimaOS Upload V2] FormData prepared:', {
@@ -1006,31 +996,46 @@ export class OZSyncClient {
 
 
 	/**
-	 * Download a file from ZimaOS using new API
+	 * Download a text file from ZimaOS.
 	 */
 	async downloadFile(remotePath: string): Promise<string | null> {
 		try {
-			// 确保token有效
+			const content = await this.downloadFileBinary(remotePath);
+			if (content === null) {
+				return null;
+			}
+			return new TextDecoder().decode(content);
+		} catch (error: any) {
+			this.log('error', `Failed to download file: ${remotePath}`, error);
+			return null;
+		}
+	}
+
+	async downloadFileBinary(remotePath: string): Promise<ArrayBuffer | null> {
+		try {
 			const tokenValid = await this.ensureValidToken();
-			if (!tokenValid) {
+			if (!tokenValid || !this.authState.tokenData?.access_token) {
 				throw new Error('Authentication required');
 			}
 
-			const encodedPath = encodeURIComponent(remotePath);
-			const response = await this.httpClient.get(`/v2_1/files/file/download?path=${encodedPath}`, {
-				responseType: 'text'
+			const params = new URLSearchParams({
+				token: this.authState.tokenData.access_token,
+				files: JSON.stringify([remotePath]),
+				action: 'download'
+			});
+
+			const response = await this.httpClient.get(`/v3/file?${params.toString()}`, {
+				responseType: 'arraybuffer'
 			});
 
 			if (response.status === 200) {
 				this.log('info', `File downloaded successfully: ${remotePath}`);
 				return response.data;
-			} else {
-				const errorMessage = 'Failed to download file';
-				this.log('error', errorMessage);
-				return null;
 			}
+
+			this.log('error', 'Failed to download file');
+			return null;
 		} catch (error: any) {
-			const errorMessage = error.response?.data?.message || error.message || 'Failed to download file';
 			this.log('error', `Failed to download file: ${remotePath}`, error);
 			return null;
 		}
