@@ -1,0 +1,87 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release assets
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set release version from tag
+        run: |
+          node -e '
+            const fs = require("fs");
+            const tag = process.env.GITHUB_REF_NAME || "";
+            const version = tag.startsWith("v") ? tag.slice(1) : tag;
+
+            for (const file of ["package.json", "package-lock.json"]) {
+              const data = JSON.parse(fs.readFileSync(file, "utf8"));
+              data.version = version;
+              if (data.packages?.[""]) {
+                data.packages[""].version = version;
+              }
+              fs.writeFileSync(file, JSON.stringify(data, null, "\t") + "\n");
+            }
+
+            const manifest = JSON.parse(fs.readFileSync("manifest.json", "utf8"));
+            manifest.version = version;
+            fs.writeFileSync("manifest.json", JSON.stringify(manifest, null, "\t") + "\n");
+
+            const versions = JSON.parse(fs.readFileSync("versions.json", "utf8"));
+            delete versions.dev;
+            versions[version] = manifest.minAppVersion;
+            fs.writeFileSync("versions.json", JSON.stringify(versions, null, "\t") + "\n");
+          '
+
+      - name: Check types
+        run: npm run check
+
+      - name: Build plugin
+        run: npm run build
+
+      - name: Verify release version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          manifest_version="$(node -p "require('./manifest.json').version")"
+
+          if [ "$tag_version" != "$manifest_version" ]; then
+            echo "::error::Tag version '$tag_version' does not match manifest version '$manifest_version'."
+            exit 1
+          fi
+
+      - name: Verify release assets
+        run: |
+          test -s main.js
+          test -s manifest.json
+          test -s styles.css
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" main.js manifest.json styles.css --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" main.js manifest.json styles.css \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Release $GITHUB_REF_NAME"
+          fi
