@@ -482,18 +482,10 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 
 
-		// Conflict Resolution
+		// Sync direction
 		new Setting(containerEl)
-			.setName('Conflict Resolution')
-			.setDesc('How to handle sync conflicts when files differ')
-			.addDropdown(dropdown => dropdown
-				.addOption('remote', 'Server wins')
-			.addOption('local', 'Local wins')
-				.setValue(this.plugin.settings.conflictResolution)
-				.onChange(async (value: 'local' | 'remote') => {
-					this.plugin.settings.conflictResolution = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName('Sync Direction')
+			.setDesc('The newest modified file wins. Local edits upload when newer; newer remote files download.');
 
 		// Debug Mode
 		new Setting(containerEl)

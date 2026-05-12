@@ -827,7 +827,7 @@ export class OZSyncClient {
 	/**
 	 * Upload a file using new OZSync API
 	 */
-	async uploadFileV2(targetPath: string, fileName: string, content: string | Buffer): Promise<boolean> {
+	async uploadFileV2(targetPath: string, fileName: string, content: string | Buffer, modifiedTime?: number): Promise<boolean> {
 		try {
 			// 确保token有效
 			const tokenValid = await this.ensureValidToken();
@@ -909,13 +909,15 @@ export class OZSyncClient {
 			const blob = new Blob([content], { type: mimeType });
 			
 			// 使用正确的FormData格式 - 根据用户提供的curl命令
+			const modTimeSeconds = Math.floor((modifiedTime ?? Date.now()) / 1000);
 			formData.append('path', targetPath);
-			formData.append('modTime', Math.floor(Date.now() / 1000).toString());
+			formData.append('modTime', modTimeSeconds.toString());
 			formData.append('file', blob, fileName); // 使用'file'字段而不是'files'
 
 			console.log('[ZimaOS Upload V2] FormData prepared:', {
 				path: targetPath,
 				fileName,
+				modTime: modTimeSeconds,
 				blobSize: blob.size,
 				blobType: blob.type,
 				isEmptyFile: blob.size === 0

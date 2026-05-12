@@ -474,8 +474,9 @@ export class SyncManager {
 				await this.ensureRemoteDirectory(targetDir);
 			}
 			
-			// Upload to OZSync using new API
-			const success = await this.client.uploadFileV2(targetDir, file.name, content);
+			// Upload to OZSync using new API. Preserve the local mtime so
+			// the next sync does not mistake the upload time for a remote edit.
+			const success = await this.client.uploadFileV2(targetDir, file.name, content, file.stat.mtime);
 			
 			operation.status = success ? 'completed' : 'failed';
 			operation.progress = 100;
@@ -529,6 +530,29 @@ export class SyncManager {
 	 */
 	private async compareFiles(localFiles: TFile[], remoteFiles: OZSyncFile[]): Promise<SyncOperation[]> {
 		const operations: SyncOperation[] = [];
+		const addUpload = (file: TFile) => {
+			operations.push({
+				id: `upload-${file.path}`,
+				type: 'upload',
+				filePath: file.path,
+				status: 'pending',
+				progress: 0,
+				timestamp: new Date(),
+				file
+			});
+		};
+		const addDownload = (remotePath: string, localPath: string) => {
+			operations.push({
+				id: `download-${remotePath}`,
+				type: 'download',
+				filePath: localPath,
+				status: 'pending',
+				progress: 0,
+				timestamp: new Date(),
+				remotePath,
+				localPath
+			});
+		};
 		
 		// Create maps for easier lookup
 		const localFileMap = new Map<string, TFile>();
@@ -551,76 +575,27 @@ export class SyncManager {
 			
 			if (!remoteFile) {
 				// Local file doesn't exist on remote - upload
-				operations.push({
-					id: `upload-${localFile.path}`,
-					type: 'upload',
-					filePath: localFile.path,
-					status: 'pending',
-					progress: 0,
-					timestamp: new Date(),
-					file: localFile
-				});
+				addUpload(localFile);
 			} else {
-				// Both files exist - apply conflict resolution strategy
+				// Both files exist - the newer side wins. The old implementation
+				// treated "remote" as "always download", which could overwrite a
+				// freshly edited local note with an older server copy.
 				const localModified = localFile.stat.mtime;
 				const remoteModified = remoteFile.lastModified;
-				
-				// Apply conflict resolution strategy
-				if (this.settings.conflictResolution === 'local') {
-					// 以本地为准 - 总是上传本地文件
-					if (localModified !== remoteModified) {
-						operations.push({
-							id: `upload-${localFile.path}`,
-							type: 'upload',
-							filePath: localFile.path,
-							status: 'pending',
-							progress: 0,
-							timestamp: new Date(),
-							file: localFile
-						});
-					}
-				} else if (this.settings.conflictResolution === 'remote') {
-					// 以服务器为准 - 总是下载远程文件
-					if (localModified !== remoteModified) {
-						operations.push({
-							id: `download-${remotePath}`,
-							type: 'download',
-							filePath: localFile.path,
-							status: 'pending',
-							progress: 0,
-							timestamp: new Date(),
-							remotePath: remotePath,
-							localPath: localFile.path
-						});
-					}
-				} else {
-					// 默认行为：基于时间戳比较
-					if (localModified > remoteModified) {
-						// Local file is newer - upload
-						operations.push({
-							id: `upload-${localFile.path}`,
-							type: 'upload',
-							filePath: localFile.path,
-							status: 'pending',
-							progress: 0,
-							timestamp: new Date(),
-							file: localFile
-						});
-					} else if (remoteModified > localModified) {
-						// Remote file is newer - download
-						operations.push({
-							id: `download-${remotePath}`,
-							type: 'download',
-							filePath: localFile.path,
-							status: 'pending',
-							progress: 0,
-							timestamp: new Date(),
-							remotePath: remotePath,
-							localPath: localFile.path
-						});
-					}
+				const modifiedToleranceMs = 1000;
+				const sizeDiffers = localFile.stat.size !== remoteFile.size;
+
+				if (
+					localModified > remoteModified + modifiedToleranceMs ||
+					(sizeDiffers && localModified >= remoteModified)
+				) {
+					addUpload(localFile);
+				} else if (
+					remoteModified > localModified + modifiedToleranceMs ||
+					(sizeDiffers && remoteModified > localModified)
+				) {
+					addDownload(remotePath, localFile.path);
 				}
-				// If modification times are equal, no sync needed
 			}
 		}
 		
@@ -629,16 +604,7 @@ export class SyncManager {
 			if (!localFileMap.has(remotePath)) {
 				// Remote file doesn't exist locally - download
 				const localPath = this.getLocalPath(remotePath);
-				operations.push({
-					id: `download-${remotePath}`,
-					type: 'download',
-					filePath: localPath,
-					status: 'pending',
-					progress: 0,
-					timestamp: new Date(),
-					remotePath: remotePath,
-					localPath: localPath
-				});
+				addDownload(remotePath, localPath);
 			}
 		}
 		
