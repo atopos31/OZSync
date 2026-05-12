@@ -2,6 +2,8 @@
 
 Sync your Obsidian notes with ZimaOS for backup, cloud access, and cross-device synchronization.
 
+![](desc.png)
+
 This plugin provides seamless integration between Obsidian and ZimaOS, allowing you to:
 - Automatically sync your notes to ZimaOS cloud storage
 - Access your notes from multiple devices
