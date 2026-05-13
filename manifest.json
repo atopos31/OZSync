@@ -3,7 +3,7 @@
 	"name": "OZSync",
 	"version": "0.1.1",
 	"minAppVersion": "0.15.0",
-	"description": "Sync your Obsidian notes with OZSync for backup, cloud access, and cross-device synchronization.",
+	"description": "Sync notes with ZimaOS for backup, cloud access, and cross-device synchronization.",
 	"author": "atopos31",
 	"authorUrl": "https://github.com/atopos31",
 	"isDesktopOnly": true
