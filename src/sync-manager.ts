@@ -39,6 +39,7 @@ import { format } from 'date-fns';
  */
 
 export class SyncManager {
+	private static readonly LOCAL_BACKUP_ROOT = '.ozsync-backups';
 	private vault: Vault;
 	private client: OZSyncClient;
 	private settings: OZSyncSettings;
@@ -367,7 +368,7 @@ export class SyncManager {
 	 */
 	private shouldExcludeFile(file: TFile): boolean {
 		// Only exclude system folders
-		const systemFolders = ['.obsidian/', '.trash/'];
+		const systemFolders = ['.obsidian/', '.trash/', `${SyncManager.LOCAL_BACKUP_ROOT}/`];
 		
 		for (const systemFolder of systemFolders) {
 			if (file.path.startsWith(systemFolder)) {
@@ -604,7 +605,9 @@ export class SyncManager {
 			if (!localFileMap.has(remotePath)) {
 				// Remote file doesn't exist locally - download
 				const localPath = this.getLocalPath(remotePath);
-				addDownload(remotePath, localPath);
+				if (!this.shouldExcludeLocalPath(localPath)) {
+					addDownload(remotePath, localPath);
+				}
 			}
 		}
 		
@@ -621,8 +624,10 @@ export class SyncManager {
 			// Ensure parent directory exists
 			const parentDir = localPath.substring(0, localPath.lastIndexOf('/'));
 			if (parentDir && !(await this.vault.adapter.exists(parentDir))) {
-				await this.vault.adapter.mkdir(parentDir);
+				await this.ensureLocalDirectory(parentDir);
 			}
+
+			await this.backupLocalFileBeforeOverwrite(localPath);
 			
 			if (this.isTextFile(localPath)) {
 				const content = await this.client.downloadFile(remotePath);
@@ -646,12 +651,96 @@ export class SyncManager {
 		}
 	}
 
+	private async backupLocalFileBeforeOverwrite(localPath: string): Promise<void> {
+		if (!(await this.vault.adapter.exists(localPath))) {
+			return;
+		}
+
+		const abstractFile = this.vault.getAbstractFileByPath(localPath);
+		if (!(abstractFile instanceof TFile)) {
+			return;
+		}
+
+		const backupPath = await this.getAvailableBackupPath(localPath);
+		const backupParent = backupPath.substring(0, backupPath.lastIndexOf('/'));
+		if (backupParent) {
+			await this.ensureLocalDirectory(backupParent);
+		}
+
+		if (this.isTextFile(localPath)) {
+			const existingContent = await this.vault.adapter.read(localPath);
+			await this.vault.adapter.write(backupPath, existingContent);
+		} else {
+			const existingContent = await this.vault.adapter.readBinary(localPath);
+			await this.vault.adapter.writeBinary(backupPath, existingContent);
+		}
+
+		console.log('[Sync Manager] Backed up local file before overwrite:', {
+			localPath,
+			backupPath
+		});
+	}
+
+	private async getAvailableBackupPath(localPath: string): Promise<string> {
+		const now = new Date();
+		const timestamp = [
+			now.getFullYear(),
+			String(now.getMonth() + 1).padStart(2, '0'),
+			String(now.getDate()).padStart(2, '0')
+		].join('-') + '-' + [
+			String(now.getHours()).padStart(2, '0'),
+			String(now.getMinutes()).padStart(2, '0'),
+			String(now.getSeconds()).padStart(2, '0')
+		].join('');
+
+		const basePath = `${SyncManager.LOCAL_BACKUP_ROOT}/${timestamp}/${localPath}`;
+		let candidate = basePath;
+		let suffix = 1;
+
+		while (await this.vault.adapter.exists(candidate)) {
+			candidate = this.appendPathSuffix(basePath, suffix);
+			suffix++;
+		}
+
+		return candidate;
+	}
+
+	private appendPathSuffix(path: string, suffix: number): string {
+		const slashIndex = path.lastIndexOf('/');
+		const fileName = slashIndex >= 0 ? path.substring(slashIndex + 1) : path;
+		const dir = slashIndex >= 0 ? path.substring(0, slashIndex + 1) : '';
+		const dotIndex = fileName.lastIndexOf('.');
+
+		if (dotIndex <= 0) {
+			return `${dir}${fileName} (${suffix})`;
+		}
+
+		return `${dir}${fileName.substring(0, dotIndex)} (${suffix})${fileName.substring(dotIndex)}`;
+	}
+
+	private async ensureLocalDirectory(path: string): Promise<void> {
+		const parts = path.split('/').filter(Boolean);
+		let current = '';
+
+		for (const part of parts) {
+			current = current ? `${current}/${part}` : part;
+			if (!(await this.vault.adapter.exists(current))) {
+				await this.vault.adapter.mkdir(current);
+			}
+		}
+	}
+
 	private isTextFile(path: string): boolean {
 		const extension = path.split('.').pop()?.toLowerCase() || '';
 		return [
 			'md', 'txt', 'json', 'js', 'ts', 'jsx', 'tsx', 'css', 'html', 'htm',
 			'csv', 'tsv', 'xml', 'svg', 'yaml', 'yml', 'toml', 'ini', 'log'
 		].includes(extension);
+	}
+
+	private shouldExcludeLocalPath(path: string): boolean {
+		const systemFolders = ['.obsidian/', '.trash/', `${SyncManager.LOCAL_BACKUP_ROOT}/`];
+		return systemFolders.some((systemFolder) => path.startsWith(systemFolder));
 	}
 	
 	/**

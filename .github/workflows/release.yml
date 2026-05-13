@@ -48,6 +48,7 @@ jobs:
 
             const versions = JSON.parse(fs.readFileSync("versions.json", "utf8"));
             delete versions.dev;
+            delete versions["0.0.0-dev"];
             versions[version] = manifest.minAppVersion;
             fs.writeFileSync("versions.json", JSON.stringify(versions, null, "\t") + "\n");
           '
