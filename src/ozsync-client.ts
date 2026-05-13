@@ -34,8 +34,7 @@ export class OZSyncClient {
 
 			console.log('[OZSync Login] Preparing login data', {
 				username: loginData.username,
-				hasPassword: !!loginData.password,
-				passwordLength: loginData.password?.length || 0
+				hasPassword: !!loginData.password
 			});
 
 			this.log('info', 'Attempting to login to OZSync', { 
@@ -50,8 +49,7 @@ export class OZSyncClient {
 				url: loginUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${loginUrl}`,
 				username: loginData.username,
-				requestMethod: 'POST',
-				headers: { 'Content-Type': 'application/json' }
+				requestMethod: 'POST'
 			});
 			
 			this.log('info', 'Sending login request', { 
@@ -85,10 +83,7 @@ export class OZSyncClient {
 				console.log('[OZSync Login] Login successful, processing token data', {
 					hasAccessToken: !!tokenData.access_token,
 					hasRefreshToken: !!tokenData.refresh_token,
-					expiresAt: tokenData.expires_at,
-					accessTokenPrefix: tokenData.access_token?.substring(0, 10) + '...',
-					refreshTokenPrefix: tokenData.refresh_token?.substring(0, 10) + '...',
-					userInfo: response.data.data.user
+					expiresAt: tokenData.expires_at
 				});
 				
 				this.log('info', 'Token data received', { 
@@ -155,10 +150,9 @@ export class OZSyncClient {
 				code: error.code,
 				stack: error.stack,
 				config: {
-					url: error.config?.url,
+					url: this.sanitizeUrl(error.config?.url),
 					method: error.config?.method,
-					baseURL: error.config?.baseURL,
-					headers: error.config?.headers
+					baseURL: error.config?.baseURL
 				}
 			});
 			
@@ -169,10 +163,9 @@ export class OZSyncClient {
 				responseData: error.response?.data,
 				code: error.code,
 				config: {
-					url: error.config?.url,
+					url: this.sanitizeUrl(error.config?.url),
 					method: error.config?.method,
-					baseURL: error.config?.baseURL,
-					headers: error.config?.headers
+					baseURL: error.config?.baseURL
 				}
 			});
 			this.showErrorNotice(errorMessage);
@@ -215,8 +208,7 @@ export class OZSyncClient {
 			console.log('[OZSync Token Refresh] Attempting token refresh:', {
 				url: refreshUrl,
 				fullUrl: `${this.httpClient.defaults.baseURL}${refreshUrl}`,
-				hasRefreshToken: !!this.authState.tokenData.refresh_token,
-				tokenPrefix: this.authState.tokenData.refresh_token?.substring(0, 10) + '...'
+				hasRefreshToken: !!this.authState.tokenData.refresh_token
 			});
 
 			const response = await this.httpClient.post(refreshUrl, requestData, {
@@ -229,7 +221,6 @@ export class OZSyncClient {
 				this.authState.tokenData = response.data.data.token;
 				this.saveAuth();
 				console.log('[ZimaOS Token Refresh] Token refreshed successfully:', {
-					newTokenPrefix: this.authState.tokenData?.access_token?.substring(0, 10) + '...',
 					expiresAt: this.authState.tokenData?.expires_at
 				});
 				this.log('info', 'Token refreshed successfully');
@@ -381,8 +372,7 @@ export class OZSyncClient {
 					this.log('info', 'Adding auth token to request', { 
 						url: config.url, 
 						method: config.method,
-						hasToken: !!this.authState.tokenData.access_token,
-						tokenPrefix: this.authState.tokenData.access_token?.substring(0, 10) + '...' 
+						hasToken: !!this.authState.tokenData.access_token
 					});
 				} else if (!isLoginRequest && !isRefreshRequest) {
 					this.log('warning', 'No auth token available for request', { 
@@ -416,15 +406,13 @@ export class OZSyncClient {
 				// 详细的错误信息收集
 				const errorDetails = {
 					method: originalRequest?.method?.toUpperCase(),
-					url: originalRequest?.url,
-					fullUrl: originalRequest?.baseURL ? `${originalRequest.baseURL}${originalRequest.url}` : originalRequest?.url,
+					url: this.sanitizeUrl(originalRequest?.url),
+					fullUrl: this.sanitizeUrl(originalRequest?.baseURL ? `${originalRequest.baseURL}${originalRequest.url}` : originalRequest?.url),
 					status: error.response?.status,
 					statusText: error.response?.statusText,
 					message: error.message,
 					code: error.code,
 					responseData: error.response?.data,
-					requestHeaders: originalRequest?.headers,
-					responseHeaders: error.response?.headers,
 					timeout: originalRequest?.timeout,
 					stack: error.stack
 				};
@@ -450,8 +438,7 @@ export class OZSyncClient {
 							// 更新请求头中的token
 							originalRequest.headers.Authorization = this.authState.tokenData.access_token;
 							this.log('info', 'Retrying request with refreshed token', {
-								url: originalRequest?.url,
-								newTokenPrefix: this.authState.tokenData.access_token?.substring(0, 10) + '...'
+								url: originalRequest?.url
 							});
 							// 重新发送原始请求
 							return this.httpClient.request(originalRequest);
@@ -1168,11 +1155,12 @@ export class OZSyncClient {
 	 * Log messages with timestamp
 	 */
 	private log(level: 'info' | 'warning' | 'error', message: string, details?: any): void {
+		const safeDetails = this.sanitizeLogDetails(details);
 		const logEntry: SyncLog = {
 			timestamp: new Date(),
 			level,
 			message,
-			details
+			details: safeDetails
 		};
 		
 		this.logs.push(logEntry);
@@ -1187,7 +1175,62 @@ export class OZSyncClient {
 			new Notice(`OZSync Error: ${message}`);
 		}
 		
-		console.log(`[OZSync] ${level.toUpperCase()}: ${message}`, details);
+		console.log(`[OZSync] ${level.toUpperCase()}: ${message}`, safeDetails);
+	}
+
+	private sanitizeUrl(value: any): any {
+		if (typeof value !== 'string') {
+			return value;
+		}
+
+		return value.replace(/([?&](?:access_token|refresh_token|token|password|authorization)=)[^&]*/gi, '$1[REDACTED]');
+	}
+
+	private sanitizeLogDetails(details: any, seen: WeakSet<object> = new WeakSet()): any {
+		if (details === null || details === undefined) {
+			return details;
+		}
+
+		if (typeof details === 'string') {
+			return this.sanitizeUrl(details);
+		}
+
+		if (typeof details !== 'object') {
+			return details;
+		}
+
+		if (seen.has(details)) {
+			return '[Circular]';
+		}
+		seen.add(details);
+
+		if (details instanceof Error) {
+			return {
+				name: details.name,
+				message: details.message
+			};
+		}
+
+		if (Array.isArray(details)) {
+			return details.map((item) => this.sanitizeLogDetails(item, seen));
+		}
+
+		const sanitized: Record<string, any> = {};
+		for (const [key, value] of Object.entries(details)) {
+			const normalizedKey = key.toLowerCase();
+			if (
+				normalizedKey.includes('token') ||
+				normalizedKey.includes('password') ||
+				normalizedKey === 'authorization' ||
+				normalizedKey === 'headers'
+			) {
+				sanitized[key] = '[REDACTED]';
+			} else {
+				sanitized[key] = this.sanitizeLogDetails(value, seen);
+			}
+		}
+
+		return sanitized;
 	}
 
 	/**

@@ -99,19 +99,6 @@ export default class OZSyncPlugin extends Plugin {
 			callback: () => this.performManualSync()
 		});
 
-		// 添加调试命令
-		this.addCommand({
-			id: 'debug-status-bar',
-			name: 'Debug Status Bar',
-			callback: () => this.debugStatusBar()
-		});
-
-		// 将插件实例暴露到全局，方便调试
-		(window as any).ozsyncPlugin = this;
-		console.log('[OZSync Plugin] 插件实例已暴露到 window.ozsyncPlugin，可在控制台中调试');
-
-
-
 		this.addCommand({
 			id: 'ozsync-login',
 			name: 'Login to OZSync',
@@ -360,7 +347,6 @@ export default class OZSyncPlugin extends Plugin {
 	debugStatusBar(): void {
 		console.log('=== ZimaOS 状态栏调试信息 ===');
 		console.log('当前时间:', new Date().toISOString());
-		console.log('插件实例:', this);
 		console.log('同步状态:', this.syncStatus);
 		console.log('状态栏元素:', this.statusBarItem);
 		
@@ -376,24 +362,9 @@ export default class OZSyncPlugin extends Plugin {
 			console.error('Status bar element not found!');
 		}
 		
-		if (this.ozsyncClient) {
-			console.log('OZSync client auth state:', this.ozsyncClient.getAuthState());
-		} else {
-			console.error('OZSync client not found!');
-		}
-		
 		console.log('Manually triggering status bar update...');
 		this.updateStatusBar();
-		
-		console.log('Manually triggering connection test...');
-		if (this.ozsyncClient) {
-			this.ozsyncClient.testConnection().then((result: any) => {
-				console.log('Connection test result:', result);
-			}).catch((error: any) => {
-				console.error('Connection test failed:', error);
-			});
-		}
-		
+
 		console.log('=== Debug info end ===');
 	}
 

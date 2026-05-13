@@ -1,206 +1,131 @@
 # OZSync for Obsidian
 
-Sync your Obsidian notes with ZimaOS for backup, cloud access, and cross-device synchronization.
+OZSync syncs an Obsidian vault with ZimaOS storage for desktop backup, file browsing, and cross-device access.
 
-![](desc.png)
+## Features
 
-This plugin provides seamless integration between Obsidian and ZimaOS, allowing you to:
-- Automatically sync your notes to ZimaOS cloud storage
-- Access your notes from multiple devices
-- Keep your notes backed up and secure
-- Browse and manage your cloud files directly from Obsidian
+- Manual vault sync to a configured ZimaOS directory
+- Optional interval-based automatic sync
+- ZimaOS cloud file browser inside Obsidian
+- Upload, download, preview, folder creation, and delete actions in the browser
+- Newer-file-wins sync based on modification time
+- Local backup before a remote download overwrites an existing local file
+- Status bar and status view for sync state
 
-Key features:
-- Real-time synchronization with ZimaOS
-- Configurable sync intervals (default: 15 minutes)
-- Cloud file browser with upload/download capabilities
-- Automatic conflict resolution
-- Secure authentication with ZimaOS servers
-- Status bar integration with sync status display
+## Requirements
+
+- Obsidian desktop
+- A reachable ZimaOS server
+- A ZimaOS account with access to the target storage path
+
+This plugin is desktop-only.
 
 ## Installation
 
-### Method 1: Manual Installation (Recommended)
+### Community Plugins
 
-**Step 1: Download the source code**
-```bash
-git clone https://github.com/LinkLeong/OZSync.git
-cd OZSync
+After OZSync is accepted into the Obsidian community plugin directory:
+
+1. Open Obsidian Settings.
+2. Go to Community plugins.
+3. Search for OZSync.
+4. Install and enable the plugin.
+
+### Manual Installation
+
+Download the latest release assets from:
+
+https://github.com/atopos31/OZSync/releases
+
+Create this folder in your vault:
+
+```text
+<Vault>/.obsidian/plugins/ozsync/
 ```
 
-**Step 2: Install dependencies and build**
-```bash
-npm install
-npm run build
+Copy these files into that folder:
+
+```text
+main.js
+manifest.json
+styles.css
 ```
 
-**Step 3: Copy to Obsidian plugins directory**
-
-1. Find your vault folder (the folder containing your Obsidian notes)
-2. Navigate to `YourVaultFolder/.obsidian/plugins/`
-3. Create a new folder named `ozsync`
-4. Copy the following files from the built project to `YourVaultFolder/.obsidian/plugins/ozsync/`:
-   - `main.js`
-   - `manifest.json`
-   - `styles.css`
-
-**Step 4: Enable the plugin in Obsidian**
-
-1. Open Obsidian
-2. Go to Settings (⚙️ icon)
-3. Navigate to "Community plugins"
-4. If "Restricted mode" is enabled, turn it off
-5. Click "Refresh" to detect the new plugin
-6. Find "OZSync" in the list of installed plugins
-7. Toggle the switch to enable it
-
-### Method 2: Development Installation
-
-For developers who want to modify the plugin:
-
-**Step 1: Clone directly to plugins directory**
-```bash
-cd /path/to/your/vault/.obsidian/plugins/
-git clone https://github.com/LinkLeong/OZSync.git ozsync
-cd ozsync
-```
-
-**Step 2: Install dependencies and start development**
-```bash
-npm install
-npm run dev
-```
-
-**Step 3: Enable in Obsidian**
-- Follow Step 4 from Method 1
-- The plugin will automatically rebuild when you make changes
+Restart Obsidian or reload the app, then enable OZSync from Community plugins.
 
 ## Configuration
 
-### Initial Setup
+Open OZSync settings and configure:
 
-1. After enabling the plugin, click the OZSync icon in the left sidebar or use the command palette (Ctrl/Cmd + P) and search for "OZSync"
-2. In the settings panel, configure:
-   - **ZimaOS Server URL**: Enter your ZimaOS server address (e.g., `http://192.168.1.100:8080`)
-   - **Username**: Your ZimaOS username
-   - **Password**: Your ZimaOS password
-   - **Sync Directory**: Choose which folder to sync (default: root vault folder)
+- Server URL: the ZimaOS host or IP address
+- Port: the ZimaOS HTTP or HTTPS port
+- Username and password: your ZimaOS credentials
+- Sync directory: the remote ZimaOS path used for vault sync
+- Auto sync: optional interval sync
 
-### Sync Settings
+The default sync directory is:
 
-- **Auto Sync**: Enable automatic synchronization (enabled by default)
-- **Sync Interval**: Set how often to sync (default: 15 minutes)
-- **Conflict Resolution**: Choose how to handle file conflicts:
-  - **Ask**: Prompt for each conflict
-  - **Local**: Always keep local version
-  - **Remote**: Always keep remote version
-  - **Newer**: Keep the newer file based on modification time
+```text
+/media/ZimaOS-HD/Obsidian
+```
 
-## Usage
+Change it if your ZimaOS storage volume uses a different path.
 
-### Basic Operations
+## Sync Behavior
 
-**Manual Sync**
-- Click the sync button in the status bar (bottom right)
-- Use Command Palette: "OZSync: Sync Now"
-- Use the ribbon icon in the left sidebar
+OZSync compares local and remote file modification times:
 
-**View Sync Status**
-- Check the status bar for current sync status
-- Green: Synced successfully
-- Yellow: Syncing in progress
-- Red: Sync error
+- If the local file is newer, OZSync uploads it.
+- If the remote file is newer, OZSync downloads it.
+- Files in `.obsidian/`, `.trash/`, and `.ozsync-backups/` are excluded.
 
-**Browse Cloud Files**
-- Click the OZSync icon in the left sidebar
-- Browse, upload, and download files directly
-- Right-click for context menu options
+Before OZSync overwrites an existing local file with a remote download, it saves the previous local copy under:
 
-### Advanced Features
+```text
+.ozsync-backups/YYYY-MM-DD-HHMMSS/
+```
 
-**Debug Mode**
-- Enable in settings to see detailed sync logs
-- Use Command Palette: "OZSync: Debug Status Bar" for troubleshooting
-- Check browser console for detailed debug information
-
-**Status Bar Information**
-- Shows last sync time
-- Displays sync status
-- Click to open sync panel
-
-## Troubleshooting
-
-### Common Issues
-
-**Plugin not appearing in Obsidian**
-- Ensure all files (`main.js`, `manifest.json`, `styles.css`) are in the correct directory
-- Check that "Restricted mode" is disabled in Community plugins settings
-- Try refreshing the plugin list
-
-**Sync not working**
-- Verify ZimaOS server URL is correct and accessible
-- Check username and password
-- Ensure ZimaOS server is running and reachable
-- Check debug logs for specific error messages
-
-**Files not syncing**
-- Check if files are in the configured sync directory
-- Verify file permissions
-- Look for conflict resolution prompts
-
-### Debug Information
-
-To get debug information:
-1. Enable debug mode in plugin settings
-2. Open browser developer tools (F12)
-3. Check the Console tab for detailed logs
-4. Use "OZSync: Debug Status Bar" command for status information
+The plugin does not automatically propagate deletions during vault sync. Delete actions are only available in the cloud browser and require confirmation.
 
 ## Development
 
-### Building from Source
+```bash
+npm install
+npm run check
+npm run build
+```
+
+For development rebuilds:
 
 ```bash
-# Clone the repository
-git clone https://github.com/LinkLeong/OZSync.git
-cd OZSync
-
-# Install dependencies
-npm install
-
-# Build for production
-npm run build
-
-# Development mode (auto-rebuild)
 npm run dev
 ```
 
-### Project Structure
+## Release
 
-- `src/main.ts` - Main plugin entry point
-- `src/ozsync-client.ts` - ZimaOS API client
-- `src/settings.ts` - Plugin settings interface
-- `src/file-browser.ts` - Cloud file browser component
-- `manifest.json` - Plugin metadata
-- `styles.css` - Plugin styles
+Release tags must match `manifest.json.version` exactly. For example:
+
+```bash
+git tag 0.1.1
+git push origin 0.1.1
+```
+
+The GitHub Actions release workflow builds the plugin and uploads:
+
+```text
+main.js
+manifest.json
+styles.css
+```
 
 ## Support
 
-If you encounter any issues or have questions:
+Open issues at:
 
-1. Check the troubleshooting section above
-2. Enable debug mode and check console logs
-3. Create an issue on [GitHub](https://github.com/LinkLeong/OZSync/issues)
-4. Include debug logs and system information when reporting issues
+https://github.com/atopos31/OZSync/issues
 
-## Sponsor
-
-If you find OZSync helpful, please consider supporting the development:
-
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/linkliang)
-
-Your support helps maintain and improve this plugin. Thank you!
+Include your Obsidian version, plugin version, ZimaOS version, and relevant console logs. Do not include passwords or tokens.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+MIT
