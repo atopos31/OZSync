@@ -355,7 +355,7 @@ export default class OZSyncPlugin extends Plugin {
 				element: this.statusBarItem,
 				text: this.statusBarItem.getText(),
 				innerHTML: this.statusBarItem.innerHTML,
-				isVisible: this.statusBarItem.style.display !== 'none',
+				isVisible: this.statusBarItem.isShown(),
 				className: this.statusBarItem.className
 			});
 		} else {

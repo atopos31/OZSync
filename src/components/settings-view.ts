@@ -16,11 +16,10 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 		containerEl.empty();
 
 		// Header
-		containerEl.createEl('h1', { text: 'OZSync Settings' });
-		containerEl.createEl('p', { 
-			text: 'Configure your OZSync connection and synchronization preferences.',
-			cls: 'setting-item-description'
-		});
+		new Setting(containerEl)
+			.setName('OZSync Settings')
+			.setDesc('Configure your OZSync connection and synchronization preferences.')
+			.setHeading();
 
 		// Connection Settings Section
 		this.createConnectionSettings(containerEl);
@@ -36,7 +35,9 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	}
 
 	private createConnectionSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Connection Settings' });
+		new Setting(containerEl)
+			.setName('Connection Settings')
+			.setHeading();
 
 		// Server URL
 		new Setting(containerEl)
@@ -200,7 +201,9 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	}
 
 	private createSyncSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Synchronization Settings' });
+		new Setting(containerEl)
+			.setName('Synchronization Settings')
+			.setHeading();
 
 		// Auto Sync Enable
 		new Setting(containerEl)
@@ -239,7 +242,9 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	}
 
 	private async createDirectorySelection(containerEl: HTMLElement): Promise<void> {
-		containerEl.createEl('h3', { text: 'Sync Directory' });
+		new Setting(containerEl)
+			.setName('Sync Directory')
+			.setHeading();
 
 		// Current sync directory display (now editable)
 		new Setting(containerEl)
@@ -324,7 +329,9 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	}
 
 	private createSyncStatus(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Sync Status' });
+		new Setting(containerEl)
+			.setName('Sync Status')
+			.setHeading();
 
 		// Create status container
 		const statusContainer = containerEl.createEl('div', { cls: 'sync-status-container' });
@@ -384,12 +391,12 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 	private updateProgressBar(progressFill: HTMLElement): void {
 		const syncStatus = this.plugin.syncManager?.getSyncStatus();
 		if (!syncStatus || syncStatus.totalFiles === 0) {
-			progressFill.style.width = '0%';
+			progressFill.setCssProps({ '--ozsync-progress': '0%' });
 			return;
 		}
 
 		const progress = (syncStatus.processedFiles / syncStatus.totalFiles) * 100;
-		progressFill.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+		progressFill.setCssProps({ '--ozsync-progress': `${Math.min(100, Math.max(0, progress))}%` });
 	}
 
 	private updateSyncDetails(container: HTMLElement): void {
@@ -478,7 +485,9 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 
 	private createAdvancedSettings(containerEl: HTMLElement): void {
-		containerEl.createEl('h2', { text: 'Advanced Settings' });
+		new Setting(containerEl)
+			.setName('Advanced Settings')
+			.setHeading();
 
 
 

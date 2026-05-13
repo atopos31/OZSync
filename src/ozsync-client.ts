@@ -1143,11 +1143,8 @@ export class OZSyncClient {
 	 */
 	private showErrorNotice(message: string): void {
 		const notice = new Notice(`❌ ${message}`, 5000);
-		// Add red styling to the notice
 		if (notice.noticeEl) {
-			notice.noticeEl.style.backgroundColor = '#ff4444';
-			notice.noticeEl.style.color = 'white';
-			notice.noticeEl.style.borderLeft = '4px solid #cc0000';
+			notice.noticeEl.addClass('ozsync-error-notice');
 		}
 	}
 

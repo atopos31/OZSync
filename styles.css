@@ -151,6 +151,7 @@
 
 .sync-progress-fill {
 	height: 100%;
+	width: var(--ozsync-progress, 0%);
 	background: var(--text-accent);
 	transition: width 0.3s ease;
 }
@@ -171,6 +172,16 @@
 .sync-speed {
 	font-family: var(--font-monospace);
 	color: var(--text-accent);
+}
+
+.ozsync-hidden {
+	display: none;
+}
+
+.ozsync-error-notice {
+	background-color: #ff4444;
+	color: white;
+	border-left: 4px solid #cc0000;
 }
 
 /* Settings sections */

@@ -81,6 +81,7 @@
 
 .sync-progress-fill {
     height: 100%;
+    width: var(--ozsync-progress, 0%);
     background: var(--interactive-accent);
     transition: width 0.3s ease;
     border-radius: 4px;
@@ -111,6 +112,16 @@
 
 .sync-speed {
     color: var(--text-accent) !important;
+}
+
+.ozsync-hidden {
+    display: none;
+}
+
+.ozsync-error-notice {
+    background-color: #ff4444;
+    color: white;
+    border-left: 4px solid #cc0000;
 }
 
 .error-text {

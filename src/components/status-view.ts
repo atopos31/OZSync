@@ -123,7 +123,7 @@ export class StatusView extends ItemView {
 			const progressBar = progressContainer.createEl('div', { cls: 'sync-progress-bar' });
 			const progressFill = progressBar.createEl('div', { cls: 'sync-progress-fill' });
 			const progress = (syncStatus.processedFiles / syncStatus.totalFiles) * 100;
-			progressFill.style.width = `${Math.min(100, Math.max(0, progress))}%`;
+			progressFill.setCssProps({ '--ozsync-progress': `${Math.min(100, Math.max(0, progress))}%` });
 			
 			// Progress text
 			progressContainer.createEl('div', { 
@@ -190,9 +190,9 @@ export class StatusView extends ItemView {
 					} else {
 						nextSyncTimeSpan.textContent = 'Starting soon...';
 					}
-					nextSyncTimeSpan.style.display = 'inline';
+					nextSyncTimeSpan.removeClass('ozsync-hidden');
 				} else {
-					nextSyncTimeSpan.style.display = 'none';
+					nextSyncTimeSpan.addClass('ozsync-hidden');
 				}
 			};
 			
