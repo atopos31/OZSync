@@ -17,7 +17,7 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 		// Header
 		new Setting(containerEl)
-			.setName('OZSync Settings')
+			.setName('General')
 			.setDesc('Configure your OZSync connection and synchronization preferences.')
 			.setHeading();
 
@@ -36,7 +36,7 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 	private createConnectionSettings(containerEl: HTMLElement): void {
 		new Setting(containerEl)
-			.setName('Connection Settings')
+			.setName('Connection')
 			.setHeading();
 
 		// Server URL
@@ -202,7 +202,7 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 	private createSyncSettings(containerEl: HTMLElement): void {
 		new Setting(containerEl)
-			.setName('Synchronization Settings')
+			.setName('Synchronization')
 			.setHeading();
 
 		// Auto Sync Enable
@@ -486,7 +486,7 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 
 	private createAdvancedSettings(containerEl: HTMLElement): void {
 		new Setting(containerEl)
-			.setName('Advanced Settings')
+			.setName('Advanced')
 			.setHeading();
 
 
