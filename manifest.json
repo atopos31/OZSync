@@ -1,7 +1,7 @@
 {
 	"id": "ozsync",
 	"name": "OZSync",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"minAppVersion": "1.7.2",
 	"description": "Sync notes with ZimaOS for backup, cloud access, and cross-device synchronization.",
 	"author": "atopos31",

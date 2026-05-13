@@ -15,12 +15,6 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		// Header
-		new Setting(containerEl)
-			.setName('General')
-			.setDesc('Configure your OZSync connection and synchronization preferences.')
-			.setHeading();
-
 		// Connection Settings Section
 		this.createConnectionSettings(containerEl);
 

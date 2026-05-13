@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-ozsync",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"description": "Sync your Obsidian vault with OZSync cloud storage, create backups, and manage files remotely.",
 	"main": "main.js",
 	"scripts": {
