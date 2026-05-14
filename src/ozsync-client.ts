@@ -1,5 +1,5 @@
 import axios, { AxiosInstance } from 'axios';
-import { OZSyncSettings, OZSyncFile, SyncLog, LoginResponse, TokenData, AuthState, OZSyncDirectory } from './types';
+import { OZSyncSettings, OZSyncFile, SyncLog, LoginResponse, TokenData, AuthState, OZSyncDirectory, OZSyncStorage } from './types';
 import { Notice } from 'obsidian';
 
 export class OZSyncClient {
@@ -219,6 +219,7 @@ export class OZSyncClient {
 
 			if (response.data.success === 200) {
 				this.authState.tokenData = response.data.data.token;
+				this.authState.isAuthenticated = true;
 				this.saveAuth();
 				console.log('[ZimaOS Token Refresh] Token refreshed successfully:', {
 					expiresAt: this.authState.tokenData?.expires_at
@@ -280,13 +281,13 @@ export class OZSyncClient {
 				const authData = JSON.parse(stored) as AuthState;
 				// 检查token是否过期
 				if (authData.tokenData && authData.tokenData.expires_at > Date.now() / 1000) {
-					this.authState = authData;
+					this.authState = { ...authData, isAuthenticated: true };
 					console.log('OZSync Auth: Valid token loaded from storage');
 				} else {
 					// Token过期，但不自动刷新，避免插件启动时的API请求
 					// 刷新将在用户主动操作时进行
 					if (authData.tokenData?.refresh_token) {
-						this.authState = authData;
+						this.authState = { ...authData, isAuthenticated: true };
 						console.log('OZSync Auth: Expired token found, will refresh when needed');
 					} else {
 						console.log('OZSync Auth: No valid token or refresh token found');
@@ -309,9 +310,13 @@ export class OZSyncClient {
 		return { ...this.authState };
 	}
 
+	private hasSavedCredentials(): boolean {
+		return !!(this.settings.username && this.settings.password);
+	}
+
 	// 检查token是否需要刷新（即将过期或已过期）
 	private async checkAndRefreshToken(): Promise<boolean> {
-		if (!this.authState.tokenData?.access_token || !this.authState.tokenData?.refresh_token) {
+		if (!this.authState.tokenData?.refresh_token) {
 			return false;
 		}
 
@@ -320,7 +325,7 @@ export class OZSyncClient {
 		const expiresAt = this.authState.tokenData.expires_at;
 		const bufferTime = 5 * 60; // 5分钟缓冲时间
 
-		if (expiresAt <= currentTime + bufferTime) {
+		if (!this.authState.tokenData.access_token || expiresAt <= currentTime + bufferTime) {
 			console.log('[OZSync Token Check] Token is expiring soon, attempting refresh');
 			return await this.refreshToken();
 		}
@@ -328,15 +333,27 @@ export class OZSyncClient {
 		return true;
 	}
 
-	// 确保token有效的包装方法
-	private async ensureValidToken(): Promise<boolean> {
-		// 如果没有认证状态，返回false
-		if (!this.authState.isAuthenticated) {
+	private async attemptAutoLogin(): Promise<boolean> {
+		if (!this.hasSavedCredentials()) {
 			return false;
 		}
 
-		// 检查并刷新token
-		return await this.checkAndRefreshToken();
+		console.log('[OZSync Auth] Attempting automatic login with saved credentials');
+		return await this.login(this.settings.username, this.settings.password);
+	}
+
+	// 确保token有效的包装方法
+	private async ensureValidToken(): Promise<boolean> {
+		// First try to recover an existing session via refresh token.
+		if (this.authState.tokenData?.refresh_token) {
+			const tokenOk = await this.checkAndRefreshToken();
+			if (tokenOk) {
+				return true;
+			}
+		}
+
+		// Fall back to a full login when refresh is unavailable or failed.
+		return await this.attemptAutoLogin();
 	}
 
 	// 登出
@@ -402,6 +419,8 @@ export class OZSyncClient {
 			},
 			async (error) => {
 				const originalRequest = error.config;
+				const isLoginRequest = originalRequest?.url?.includes('/users/login');
+				const isRefreshRequest = originalRequest?.url?.includes('/users/refresh');
 				
 				// 详细的错误信息收集
 				const errorDetails = {
@@ -425,40 +444,57 @@ export class OZSyncClient {
 				
 				this.log('error', `HTTP ${errorDetails.method} request failed`, errorDetails);
 				
-				if (error.response?.status === 401 && this.authState.tokenData?.refresh_token && !originalRequest._retry) {
+				if (error.response?.status === 401 && originalRequest && !isLoginRequest && !isRefreshRequest && !originalRequest._retry) {
 					originalRequest._retry = true;
-					this.log('info', 'Attempting token refresh due to 401 error', {
+					this.log('info', 'Attempting authentication recovery due to 401 error', {
 						url: originalRequest?.url,
 						method: originalRequest?.method,
 						hasRefreshToken: !!this.authState.tokenData?.refresh_token
 					});
-					try {
-						const refreshed = await this.refreshToken();
-						if (refreshed && this.authState.tokenData?.access_token) {
-							// 更新请求头中的token
+					if (this.authState.tokenData?.refresh_token) {
+						try {
+							const refreshed = await this.refreshToken();
+							if (refreshed && this.authState.tokenData?.access_token) {
+								// 更新请求头中的token
+								originalRequest.headers = originalRequest.headers || {};
+								originalRequest.headers.Authorization = this.authState.tokenData.access_token;
+								this.log('info', 'Retrying request with refreshed token', {
+									url: originalRequest?.url
+								});
+								// 重新发送原始请求
+								return this.httpClient.request(originalRequest);
+							}
+						} catch (refreshError: any) {
+							const refreshErrorDetails = {
+								message: refreshError.message,
+								status: refreshError.response?.status,
+								statusText: refreshError.response?.statusText,
+								responseData: refreshError.response?.data,
+								stack: refreshError.stack
+							};
+							console.error('[ZimaOS Token Refresh Error] Detailed error:', refreshErrorDetails);
+							this.log('error', 'Token refresh error', refreshErrorDetails);
+						}
+					}
+
+					if (this.hasSavedCredentials()) {
+						this.log('info', 'Attempting automatic login after token refresh failed', {
+							url: originalRequest?.url
+						});
+
+						const reloginSuccess = await this.attemptAutoLogin();
+						if (reloginSuccess && this.authState.tokenData?.access_token) {
+							originalRequest.headers = originalRequest.headers || {};
 							originalRequest.headers.Authorization = this.authState.tokenData.access_token;
-							this.log('info', 'Retrying request with refreshed token', {
+							this.log('info', 'Retrying request after automatic login', {
 								url: originalRequest?.url
 							});
-							// 重新发送原始请求
 							return this.httpClient.request(originalRequest);
-						} else {
-							this.log('error', 'Token refresh failed, clearing auth and rejecting request');
-							this.clearAuth();
 						}
-					} catch (refreshError: any) {
-						const refreshErrorDetails = {
-							message: refreshError.message,
-							status: refreshError.response?.status,
-							statusText: refreshError.response?.statusText,
-							responseData: refreshError.response?.data,
-							stack: refreshError.stack
-						};
-						console.error('[ZimaOS Token Refresh Error] Detailed error:', refreshErrorDetails);
-						this.log('error', 'Token refresh error', refreshErrorDetails);
-						this.clearAuth();
-						// 不要抛出refreshError，而是继续处理原始的401错误
 					}
+
+					this.log('error', 'Authentication recovery failed, clearing auth and rejecting request');
+					this.clearAuth();
 				}
 				return Promise.reject(error);
 			}
@@ -561,6 +597,47 @@ export class OZSyncClient {
 			this.log('error', 'Failed to list directories', { 
 				path, 
 				error: error.message, 
+				status: error.response?.status,
+				statusText: error.response?.statusText,
+				responseData: error.response?.data
+			});
+			throw error;
+		}
+	}
+
+	/**
+	 * Load available local storage prefixes for sync destination selection.
+	 */
+	async getLocalStorages(): Promise<OZSyncStorage[]> {
+		try {
+			const tokenValid = await this.ensureValidToken();
+			if (!tokenValid) {
+				throw new Error('Authentication required');
+			}
+
+			const requestUrl = '/v2/local_storage/storages';
+			const response = await this.httpClient.get(requestUrl);
+
+			this.log('info', 'Local storages response received', {
+				status: response.status,
+				itemCount: Array.isArray(response.data) ? response.data.length : 0
+			});
+
+			if (!Array.isArray(response.data)) {
+				return [];
+			}
+
+			return response.data
+				.filter((item: any) => typeof item?.path === 'string' && typeof item?.name === 'string')
+				.map((item: any) => ({
+					name: item.name,
+					path: item.path,
+					type: item.type || 'UNKNOWN',
+					extensions: item.extensions
+				}));
+		} catch (error: any) {
+			this.log('error', 'Failed to load local storages', {
+				error: error.message,
 				status: error.response?.status,
 				statusText: error.response?.statusText,
 				responseData: error.response?.data

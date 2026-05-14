@@ -60,6 +60,17 @@ export interface OZSyncDirectory {
 	lastModified?: Date;
 }
 
+export interface OZSyncStorage {
+	name: string;
+	path: string;
+	type: string;
+	extensions?: {
+		health?: boolean;
+		size?: number;
+		used?: number;
+	};
+}
+
 export interface OZSyncFile {
 	name: string;
 	path: string;

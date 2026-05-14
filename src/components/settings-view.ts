@@ -1,6 +1,6 @@
-import { Setting, PluginSettingTab, App, Notice } from 'obsidian';
+import { Setting, PluginSettingTab, App, Notice, DropdownComponent, ButtonComponent } from 'obsidian';
 import OZSyncPlugin from '../../main';
-import { OZSyncSettings, OZSyncDirectory } from '../types';
+import { OZSyncSettings, OZSyncDirectory, OZSyncStorage } from '../types';
 import { DirectoryBrowserModal } from './directory-browser-modal';
 
 export class OZSyncSettingsTab extends PluginSettingTab {
@@ -240,17 +240,46 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 			.setName('Sync Directory')
 			.setHeading();
 
-		// Current sync directory display (now editable)
+		const destinationSetting = new Setting(containerEl)
+			.setName('Sync Destination')
+			.setDesc('Files will be synchronized into the selected storage prefix plus /Obsidian.');
+		const destinationEl = destinationSetting.controlEl.createDiv({ cls: 'directory-path ozsync-sync-destination' });
+		destinationEl.textContent = this.plugin.settings.syncDirectory || this.buildSyncDirectory('/media/ZimaOS-HD');
+
+		const statusEl = containerEl.createEl('div', { cls: 'ozsync-storage-status' });
+
+		let storageDropdown: DropdownComponent | null = null;
+		let reloadButton: ButtonComponent | null = null;
+
 		new Setting(containerEl)
-			.setName('Current Sync Directory')
-			.setDesc('Files will be synchronized to this directory on OZSync')
-			.addText(text => text
-				.setValue(this.plugin.settings.syncDirectory || '/media/ZimaOS-HD/Obsidian')
-				.setPlaceholder('/media/ZimaOS-HD/Obsidian')
-				.onChange(async (value) => {
-					this.plugin.settings.syncDirectory = value;
+			.setName('Storage Device')
+			.setDesc('Fetch storage prefixes from ZimaOS and sync into /Obsidian under the selected device.')
+			.addDropdown(dropdown => {
+				storageDropdown = dropdown;
+				dropdown.addOption('', 'Login to load storages');
+				dropdown.setValue('');
+				dropdown.setDisabled(true);
+				dropdown.onChange(async (value) => {
+					if (!value) {
+						return;
+					}
+
+					this.plugin.settings.syncDirectory = this.buildSyncDirectory(value);
 					await this.plugin.saveSettings();
-				}));
+					destinationEl.textContent = this.plugin.settings.syncDirectory;
+					statusEl.empty();
+					statusEl.removeClass('ozsync-auth-error');
+				});
+			})
+			.addButton(button => {
+				reloadButton = button;
+				button.setButtonText('Reload')
+					.onClick(async () => {
+						await this.loadStorageOptions(storageDropdown, destinationEl, statusEl, reloadButton);
+					});
+			});
+
+		await this.loadStorageOptions(storageDropdown, destinationEl, statusEl, reloadButton);
 
 		// Browse directory button - now opens ZimaOS file browser
 		new Setting(containerEl)
@@ -303,6 +332,92 @@ export class OZSyncSettingsTab extends PluginSettingTab {
 		} catch (error) {
 			console.error('Failed to open OZSync file browser:', error);
 			new Notice('Failed to open OZSync file browser');
+		}
+	}
+
+	private buildSyncDirectory(storagePath: string): string {
+		const normalized = storagePath.replace(/\/+$/, '');
+		return `${normalized}/Obsidian`;
+	}
+
+	private extractStoragePrefix(syncDirectory: string): string {
+		const normalized = (syncDirectory || '').replace(/\/+$/, '');
+		if (normalized.endsWith('/Obsidian')) {
+			return normalized.slice(0, -'/Obsidian'.length);
+		}
+		return normalized;
+	}
+
+	private formatStorageOption(storage: OZSyncStorage): string {
+		return `${storage.name} (${storage.path})`;
+	}
+
+	private async loadStorageOptions(
+		dropdown: DropdownComponent | null,
+		destinationEl: HTMLElement,
+		statusEl: HTMLElement,
+		reloadButton: ButtonComponent | null
+	): Promise<void> {
+		if (!dropdown) {
+			return;
+		}
+
+		dropdown.selectEl.empty();
+		dropdown.addOption('', 'Loading storages...');
+		dropdown.setValue('');
+		dropdown.setDisabled(true);
+		statusEl.empty();
+
+		if (reloadButton) {
+			reloadButton.setButtonText('Loading...');
+			reloadButton.setDisabled(true);
+		}
+
+		try {
+			const storages = await this.plugin.ozsyncClient.getLocalStorages();
+			dropdown.selectEl.empty();
+
+			if (storages.length === 0) {
+				dropdown.addOption('', 'No storage devices found');
+				destinationEl.textContent = this.plugin.settings.syncDirectory || 'Unavailable';
+				statusEl.textContent = 'No storage devices were returned by ZimaOS.';
+				return;
+			}
+
+			for (const storage of storages) {
+				dropdown.addOption(storage.path, this.formatStorageOption(storage));
+			}
+
+			const currentPrefix = this.extractStoragePrefix(this.plugin.settings.syncDirectory);
+			const hasCurrentPrefix = storages.some((storage) => storage.path === currentPrefix);
+			const selectedPrefix = hasCurrentPrefix ? currentPrefix : storages[0].path;
+			const resolvedSyncDirectory = this.buildSyncDirectory(selectedPrefix);
+
+			if (this.plugin.settings.syncDirectory !== resolvedSyncDirectory) {
+				this.plugin.settings.syncDirectory = resolvedSyncDirectory;
+				await this.plugin.saveSettings();
+			}
+
+			dropdown.setValue(selectedPrefix);
+			dropdown.setDisabled(false);
+			destinationEl.textContent = this.plugin.settings.syncDirectory;
+			statusEl.empty();
+			statusEl.removeClass('ozsync-auth-error');
+		} catch (error: any) {
+			dropdown.selectEl.empty();
+			dropdown.addOption('', 'Login to load storages');
+			dropdown.setValue('');
+			dropdown.setDisabled(true);
+			destinationEl.textContent = this.plugin.settings.syncDirectory || 'Unavailable';
+
+			const message = error.response?.data?.message || error.message || 'Failed to load storages';
+			statusEl.textContent = message === 'Authentication required' ? 'Login to load storage devices.' : `Failed to load storages: ${message}`;
+			statusEl.addClass('ozsync-auth-error');
+		} finally {
+			if (reloadButton) {
+				reloadButton.setButtonText('Reload');
+				reloadButton.setDisabled(false);
+			}
 		}
 	}
 

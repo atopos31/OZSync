@@ -26,6 +26,18 @@
 	font-family: var(--font-monospace);
 }
 
+.ozsync-sync-destination {
+	margin-bottom: 0;
+	min-width: 280px;
+	color: var(--text-normal);
+}
+
+.ozsync-storage-status {
+	margin: 8px 0 16px;
+	font-size: 0.9em;
+	color: var(--text-muted);
+}
+
 .directory-list {
 	max-height: 400px;
 	overflow-y: auto;
